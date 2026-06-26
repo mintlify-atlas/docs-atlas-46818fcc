@@ -1,0 +1,73 @@
+---
+title: "LogicScriptCli: Command-Line Translation and Evaluation"
+sidebarTitle: "CLI"
+description: "LogicScriptCli translates a Spanish natural-language sentence to a propositional formula from the command line, then evaluates it using the logic engine."
+---
+
+`LogicScriptCli` (class `tautoteacher2.logicscript.LogicScriptCli`) provides a command-line interface to the full TautoTeacher pipeline: natural-language translation via `LogicScriptService` followed by propositional evaluation via `MotorLogico`. It is useful for scripting batch translations, testing individual sentences without launching the GUI, and verifying that a freshly built output directory has all resources in place.
+
+## Usage
+
+```text
+java -cp out tautoteacher2.logicscript.LogicScriptCli "<sentence>"
+```
+
+Pass the Spanish sentence as a single quoted argument. If the sentence contains spaces (it almost always will), wrap it in double quotes on Windows or single quotes on Unix shells.
+
+### Multi-word sentence example
+
+```bash
+java -cp out tautoteacher2.logicscript.LogicScriptCli "si estudio y duermo apruebo"
+```
+
+## Successful translation output
+
+When the sentence is translated and evaluated without errors, the CLI prints the following structure to stdout:
+
+```text
+=== LogicScript (demo consola) ===
+Entrada: si llueve entonces llevo paraguas
+
+Estado: OK
+Fórmula: (llover → llevar)
+Proposiciones: {p=llover, q=llevar}
+Pasos de análisis:
+  - Entrada normalizada: si llueve entonces llevo paraguas
+  - Lexemas LN: [SI, LITERAL(llueve), ENTONCES, LITERAL(llevo paraguas)]
+  - Bloque 1: si llueve entonces llevo paraguas
+  - Tokens bloque: [SI, LITERAL(llueve), ENTONCES, LITERAL(llevo paraguas)]
+  - SemanticMapper: patrón SI_ENTONCES detectado.
+
+Motor lógico:
+  Tautología: false
+  Clasificación: CONTINGENCIA
+```
+
+The `Pasos de análisis` section mirrors the `pasosDeAnalisis` list from `LogicScriptResult` and records every decision taken by the pipeline — normalization, tokenization, pattern match — making it straightforward to diagnose unexpected output.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Translation and logic evaluation both succeeded. |
+| `1` | No arguments were supplied, or the joined argument string is empty. |
+| `2` | `LogicScriptService.traducir` returned a failure result (`isExito() == false`). The error message and analysis steps are printed to stderr. |
+| `3` | `MotorLogico` threw an exception while evaluating the formula (e.g. the formula string is malformed). The exception message is printed to stdout and the process exits with code `3`. |
+
+## Error output
+
+When translation fails (exit code `2`), the CLI prints to stderr:
+
+```text
+Estado: ERROR
+<mensaje de error>
+  - <paso 1>
+  - <paso 2>
+  ...
+```
+
+This includes the full analysis trace up to the point of failure, which is often enough to pinpoint whether the problem is a missing `lemma`, an unmatched `pattern`, or a `.lgs` load error.
+
+<Note>
+  The classpath (`-cp out`) must contain **both** the compiled `.class` files **and** the copied resources directory. In particular, `logicscript/core.lgs` must be reachable at `out/logicscript/core.lgs` for the engine to load the declarative rules. The `compile.ps1` script included in the repository handles the copy step automatically. If you compile manually and see a `RECURSO_NO_ENCONTRADO` warning in the analysis steps, copy `src/main/resources/` into `out/` and re-run.
+</Note>

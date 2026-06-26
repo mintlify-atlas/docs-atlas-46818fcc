@@ -1,0 +1,50 @@
+---
+title: "TautoTeacher 2.0: Propositional Logic Learning Tool"
+sidebarTitle: "Introduction"
+description: "TautoTeacher 2.0 is an educational Java desktop application that evaluates propositional logic formulas and translates Spanish sentences into formal logic."
+---
+
+TautoTeacher 2.0 is an educational Java desktop application designed for students and instructors working with propositional logic. It accepts input in two forms — direct logical formulas using standard connective symbols, and natural-language sentences written in Spanish — and evaluates them to determine whether they represent tautologies, contradictions, or contingencies. The tool pairs every classification with a step-by-step educational explanation and an interactive truth table, giving learners a concrete view of the reasoning behind each result.
+
+## From TautoTeacher 1.0 to 2.0
+
+The original **TautoTeacher 1.0** was a single-file Java/Swing application. While functional, its monolithic structure mixed the logic engine, the user interface, and all parsing concerns into one place, making the code difficult to extend or test in isolation.
+
+**TautoTeacher 2.0** is a ground-up refactoring that separates the application into four clearly bounded layers:
+
+- **Core Logic Engine** — formula parsing, tautology checking, truth table generation, evaluation tree construction, and educational explanation building, all in `tautoteacher2.core`.
+- **NLP Pipeline** — rule-based Spanish natural-language processing (text normalization, lexer tokenization, morphological normalization, and semantic mapping) in `tautoteacher2.nlp`.
+- **LogicScript DSL** — a lightweight domain-specific language and runtime that bridges the NLP pipeline and the logic engine, housed in `tautoteacher2.logicscript`.
+- **User Interface** — a Swing GUI controller and panel components in `tautoteacher2.ui`, which calls into the service layer rather than directly into the engine.
+
+This layered design makes each concern independently testable and opens the door to future improvements — such as richer morphological rules, new connective patterns, or alternative front-ends — without touching the core evaluator.
+
+## Core Goals
+
+TautoTeacher 2.0 is built around four educational objectives:
+
+1. **Analyze Spanish propositions** — accept natural-language statements about everyday scenarios ("si llueve entonces llevo paraguas") and understand their logical structure.
+2. **Translate to formal logic** — produce a well-formed propositional formula (`(p → q)`) with a mapping from propositional variables back to the original Spanish clauses.
+3. **Classify the formula** — determine whether it is a **tautology** (true under every interpretation), a **contradiction** (false under every interpretation), or a **contingency** (true for some and false for others).
+4. **Show explanations and truth tables** — provide students with the full truth table, a labeled evaluation tree, and a plain-language explanation of why the formula received its classification.
+
+## Explore the Documentation
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Compile and run TautoTeacher 2.0 in minutes, then evaluate your first formula and natural-language sentence.
+  </Card>
+  <Card title="Architecture" icon="building" href="/architecture">
+    Understand the four-layer module design and how data flows from user input to classified formula.
+  </Card>
+  <Card title="Core Logic Engine" icon="calculator" href="/core/motor-logico">
+    Dive into formula parsing, truth table generation, and the evaluation tree that powers educational explanations.
+  </Card>
+  <Card title="LogicScript Overview" icon="code" href="/logicscript/overview">
+    Learn how the LogicScript DSL and its CLI translate Spanish sentences into propositional logic formulas.
+  </Card>
+</CardGroup>
+
+<Note>
+  The NLP module in TautoTeacher 2.0 works entirely without machine learning. It relies on rule-based tokenization and pattern matching defined in the `core.lgs` resource file: connective keywords (such as "si", "entonces", "y", "o", "si y solo si") are recognized by a deterministic lexer, morphological variants are normalized using suffix rules, and semantic patterns assemble the intermediate representation. This approach keeps the system predictable, inspectable, and easy to extend by editing the `.lgs` file.
+</Note>

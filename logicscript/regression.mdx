@@ -1,0 +1,134 @@
+---
+title: "LogicScript Regression Harness"
+sidebarTitle: "Regression Tests"
+description: "LogicScriptRegressionHarness runs 39 natural-language test cases through the full pipeline and verifies that every formula output matches its expected value exactly."
+---
+
+The LogicScript pipeline is unusual in that its behaviour is determined jointly by **data** (`core.lgs`) and **code** (`NaturalLexer`, `SemanticMapper`, `EmitidorFormula`). A single edit to any of those layers — even adding one `lemma` line — can silently break a sentence that previously translated correctly. `LogicScriptRegressionHarness` guards against that by recording the expected formula for every sentence the pipeline should handle, then asserting that the live pipeline still produces exactly those formulas after any change. Running the harness takes only a few seconds and requires no external test framework.
+
+## Running the harness
+
+Compile the project (with resources copied), then run:
+
+```text
+java -cp out tautoteacher2.logicscript.LogicScriptRegressionHarness
+```
+
+**Success** — all cases pass:
+
+```text
+LogicScriptRegressionHarness: OK (39 casos LN + diagnóstico .lgs).
+```
+
+Exit code: `0`.
+
+**Failure** — one or more cases deviate from the expected output:
+
+```text
+FALLO [conjuncion] entrada="llueve y estudio"
+  esperaba exito=true, obtuvo=true
+  formula esperada: (p ∧ q)
+  formula obtenida: (p ∧ r)
+LogicScriptRegressionHarness: 1 fallo(s).
+```
+
+Exit code: `1`. Details for every failing case are printed to stderr, including the case ID, the expected and actual values, and (if translation failed unexpectedly) the error message.
+
+In addition to the natural-language cases, the harness runs two diagnostic checks at startup:
+
+- **`verificarDiagnosticoCargaLgs`** — feeds a deliberately malformed `.lgs` snippet to `LgsCargador` and asserts that `ERROR_SINTAXIS` is returned with a message containing the line number.
+- **`verificarLexruleCarga`** — parses a minimal in-memory `.lgs` with a `lexrule sufijo` rule and asserts that `NormalizadorMorfologico` correctly reduces a test word.
+
+## What each case asserts
+
+Every test case is a record with four fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | `String` | Unique identifier used in failure messages |
+| `entrada` | `String` | The raw Spanish sentence to translate |
+| `esperaExito` | `boolean` | Whether `isExito()` should be `true` |
+| `formulaEsperada` | `String` | The exact formula string expected when `esperaExito` is `true` |
+
+The harness calls `LogicScriptService.traducir(entrada)` — the same facade used by the GUI and CLI — and checks:
+
+1. `result.isExito() == esperaExito`
+2. If success was expected: `result.getFormula().equals(formulaEsperada)`
+
+Neither the proposition map nor individual `pasosDeAnalisis` entries are asserted (they can be added later).
+
+## Test categories covered
+
+<Accordion title="Basic implication (si…entonces, si elíptico, cuando, siempre que)">
+The core `SI_ENTONCES` pattern and its elliptical and alternative-keyword variants:
+
+- `si llueve entonces llevo paraguas` → `(p → q)`
+- `si estudio apruebo` → `(p → q)` (elliptical — no `entonces`)
+- `cuando llueve llevo paraguas` → `(p → q)`
+- `siempre que trabajo entonces descanso` → `(p → q)`
+- `llevo paraguas si llueve` → `(p → q)` (consequent-first order)
+- `en caso de que llueva, llevo paraguas` → `(p → q)`
+</Accordion>
+
+<Accordion title="Conjunction and disjunction">
+Simple binary patterns and compound antecedent/consequent forms:
+
+- `llueve y estudio` → `(p ∧ q)`
+- `llueve o estudio` → `(p ∨ q)`
+- `si estudio y practico entonces apruebo` → `((p ∧ q) → r)`
+- `si llueve entonces llevo paraguas o gorra` → `(p → (q ∨ r))`
+- `si llueve entonces llevo paraguas y gorra` → `(p → (q ∧ r))`
+- `si llueve o solea entonces salgo` → `((p ∨ q) → r)`
+</Accordion>
+
+<Accordion title="Special connectives (solo si, a menos que, si y solo si)">
+- `apruebo solo si estudio` → `(p → q)`
+- `salgo a menos que llueva` → `(¬p → q)`
+- `apruebo si y solo si estudio` → `(p ↔ q)`
+- `practico si y solo si estudio` → `(p ↔ q)`
+</Accordion>
+
+<Accordion title="Morphologically inflected sentences">
+Cases that exercise `lexrule` suffix normalization and `lemma` mappings rather than exact surface forms:
+
+- `si duermo descanso` — `duermo` handled by `heuristica primera_persona`
+- `si estudian aprueban` — regular `-an` suffix rule
+- `si duerme descansa` — `lemma duerme -> dormir`
+- `si duermes descansas` — `lemma duermes -> dormir`
+- `si puede descansar` — `lemma puede -> poder`
+- `si llego descanso` — first-person `-o` heuristic
+- `practico si y solo si estudio` — first-person `-o` heuristic for both sides
+</Accordion>
+
+<Accordion title="Compound sentences with comma-separated clauses">
+Sentences that contain multiple independent clauses separated by commas, which the engine splits into blocks and joins with `∧`:
+
+- `si estudio apruebo, si no estudio no apruebo` → `((p → q) ∧ (¬p → ¬q))`
+- `si llueve entonces llevo paraguas, en caso de que estudio, apruebo` → `((p → q) ∧ (r → s))`
+- `cuando llueve llevo paraguas, si estudio apruebo` → `((p → q) ∧ (r → s))`
+</Accordion>
+
+<Accordion title="Error cases">
+The harness verifies that the pipeline fails gracefully rather than crashing:
+
+- Empty string `""` — expects `isExito() == false`
+- Whitespace-only input `"   \t  "` — expects `isExito() == false`
+</Accordion>
+
+## When to run the harness
+
+Run the harness after any of the following changes:
+
+- Editing `core.lgs` (adding or removing `lemma`, `lexrule`, or `pattern` entries)
+- Modifying `NaturalLexer` (token recognition logic)
+- Modifying `SemanticMapper` (pattern matching or fallback behaviour)
+- Modifying `EmitidorFormula` (formula serialization or symbol assignment)
+- Modifying `NormalizadorMorfologico` or `BaseConocimiento` (canonicalization)
+
+<Tip>
+  When adding support for a new sentence structure, follow the test-first workflow: add the failing test case to the harness first (with the exact expected formula), then update `core.lgs` or Java code until the harness goes green. This guarantees you know precisely what the output should look like before you start implementing and prevents accidental regressions during development.
+</Tip>
+
+<Warning>
+  Formula strings in test cases are case-sensitive and must use the exact Unicode symbols that `EmitidorFormula` emits: `→` (U+2192), `∧` (U+2227), `∨` (U+2228), `↔` (U+2194), `¬` (U+00AC). Do **not** use keyboard aliases such as `->`, `&&`, `||`, or `!`. In the harness source file these are written as Unicode escapes (`\u2192`, `\u2227`, `\u2228`, `\u2194`) so that the file's encoding never affects the comparison.
+</Warning>

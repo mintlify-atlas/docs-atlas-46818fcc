@@ -1,0 +1,101 @@
+---
+title: "TautoTeacher 2.0 GUI: Swing Desktop Application"
+sidebarTitle: "UI Overview"
+description: "TautoTeacher 2.0's Swing-based GUI provides two input modes, a result panel with color-coded verdicts, a truth table display, and an educational explanation area."
+---
+
+TautoTeacher 2.0 ships with a Java Swing desktop GUI launched by `tautoteacher2.Main`. After printing a startup message to the console, `Main` instantiates `TautoTeacherApp` and calls `app.iniciar()`, which constructs `VentanaPrincipal` — a maximized `JFrame` titled **"TautoTeacher - Logica Proposicional"** — and wires its three inner panels together. The window is organized into three functional areas: an input panel, a result panel, and a visualization panel, all managed by the `TautoTeacherApp` controller.
+
+## Window structure
+
+`VentanaPrincipal` uses a `BorderLayout` as its root, with a fixed north area (header + navigation cards) and a `CardLayout`-managed center that switches between three sections: **Análisis**, **Visualización Clara**, and **Explicación**. Each section is navigated by clicking one of three cards rendered in the header.
+
+The three main panels are:
+
+<CardGroup cols={3}>
+  <Card title="PanelEntradaNatural" icon="keyboard">
+    The input area. Hosts a `JTabbedPane` with two tabs — **Fórmula lógica** and **Lenguaje natural** — plus a **✔ Verificar Tautología** button that fires the `procesarEntrada` listener registered by `TautoTeacherApp`.
+  </Card>
+  <Card title="PanelResultadoLogico" icon="circle-check">
+    Displays the verdict — **TAUTOLOGÍA**, **CONTRADICCIÓN**, or **CONTINGENCIA** — together with a large icon (✔ / ✘ / ○) and a short explanatory text, both color-coded to the classification.
+  </Card>
+  <Card title="PanelVisualizacion" icon="table">
+    Renders the truth table (pestaña **Tabla**) with color-coded V/F cells, and the evaluation tree (pestaña **Árbol**) for any selected interpretation row. Populated by `mostrarTabla(TablaVerdad.Resultado, Map)`.
+  </Card>
+</CardGroup>
+
+## Color coding
+
+`TautoTeacherApp` maps each classification to a distinct color used in both `PanelResultadoLogico` and the icon label inside `setDictamen`:
+
+| Classification | Color | Hex |
+|---|---|---|
+| TAUTOLOGÍA | Green | `#28a745` |
+| CONTRADICCIÓN | Red | `#dc3545` |
+| CONTINGENCIA | Dark text | `#212529` |
+
+`PanelResultadoLogico.setDictamen` mirrors this palette for its icon label: ✔ in green for tautologies, ✘ in red for contradictions, and ○ in amber (`#c87800`) for contingencies.
+
+## `TautoTeacherApp` controller
+
+`TautoTeacherApp` is the central controller. It holds references to `VentanaPrincipal` and its three panels, and owns a `LogicScriptService` instance for natural-language translation.
+
+### `iniciar()`
+
+Creates `VentanaPrincipal`, retrieves the three panel references via the window's getters, and registers an `ActionListener` on `PanelEntradaNatural` that calls `procesarEntrada()` when the verify button is clicked. The window is then made visible.
+
+### `procesarEntrada()`
+
+Reads `PanelEntradaNatural.getModoEntrada()` and dispatches accordingly:
+
+- **`LENGUAJE_NATURAL`** → delegates to `procesarLenguajeNatural()`, which runs the full LogicScript NLP pipeline.
+- **`FORMULA`** → normalizes the text with `normalizarSimbolosTeclado()`, then passes the result directly to `MotorLogico.tipoFormula(formula)` without any NLP step.
+
+In both paths, an empty input causes an error message to be set on the result panel in red, and the visualization and educational panels are cleared.
+
+### `actualizarVisualizacion(String formula, Map<String, String> proposiciones)`
+
+Calls `TablaVerdad.construir(formula)` to produce a `TablaVerdad.Resultado`, then passes it together with the proposition map to `panelVisualizacion.mostrarTabla(...)`, which populates both the truth-table tab and the evaluation-tree dropdown.
+
+```java
+private void actualizarVisualizacion(String formula, Map<String, String> proposiciones) {
+    panelVisualizacion.mostrarTabla(TablaVerdad.construir(formula), proposiciones);
+}
+```
+
+## Launch flow
+
+The application entry point lives in `tautoteacher2.Main`:
+
+```java
+// Main.java
+TautoTeacherApp app = new TautoTeacherApp();
+app.iniciar();
+```
+
+`iniciar()` is the single public method on `TautoTeacherApp`. Everything else — panel wiring, listener registration, formula evaluation, and educational text generation — is handled internally.
+
+## `ExplicacionEducativaBuilder.construir`
+
+After every successful evaluation, `TautoTeacherApp` calls:
+
+```java
+ventana.setContenidoEducativo(
+    ExplicacionEducativaBuilder.construir(
+        seccionTecnica,   // formatted header text (formula / NL source, classification)
+        formula,          // the evaluated propositional formula
+        tipo,             // "TAUTOLOGÍA" | "CONTRADICCIÓN" | "CONTINGENCIA"
+        proposiciones     // symbol-to-lemma map from LogicScript, or Map.of() for direct formulas
+    )
+);
+```
+
+`ExplicacionEducativaBuilder.construir` assembles the scrollable educational explanation by concatenating three parts:
+
+1. **Technical section** — the pre-formatted header block (`seccionTecnica`) showing the original input, the derived formula, and the classification.
+2. **Natural-language reading** — if the `proposiciones` map is non-empty, the formula is rendered with lemmas substituted for symbols (e.g. `«llover» → «llevar paraguas»`).
+3. **Educational demonstration** — for tautologies and contingencies, `MotorLogico.generarExplicacionEducativa` produces a structured proof outline; for contradictions, a fixed explanation is appended.
+
+<Note>
+  `VentanaPrincipal.setContenidoEducativo(String text)` and `limpiarContenidoEducativo()` control the scrollable `JTextArea` inside the **Explicación** section on the right side of the window. `setContenidoEducativo` replaces the text and resets the scroll position to the top; `limpiarContenidoEducativo` restores the placeholder message and also calls `panelVisualizacion.limpiar()` to reset the table and tree views simultaneously.
+</Note>

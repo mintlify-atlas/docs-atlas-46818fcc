@@ -1,0 +1,87 @@
+---
+title: "Evaluation Tree Visualization"
+sidebarTitle: "Evaluation Tree"
+description: "ConstructorArbolEvaluacion builds step-by-step expression trees from propositional formulas, showing how each sub-expression contributes to the final result."
+---
+
+TautoTeacher 2.0 builds a full evaluation tree for every truth assignment a student selects in the truth table panel, letting them see exactly *why* a formula evaluates to `true` or `false` for a given row — not just the final answer. The tree decomposes the formula recursively by operator precedence, labelling each internal node with its logical operator and its computed value, and each leaf node with the assigned boolean value of the variable. This visual walkthrough is one of the core pedagogical features that distinguishes TautoTeacher from a plain formula checker.
+
+## Classes
+
+<CardGroup cols={3}>
+  <Card title="NodoArbolEvaluacion" icon="circle-nodes">
+    The building block of the tree. Each node stores:
+    - `String etiqueta` — the operator symbol (`∧`, `∨`, `¬`, `→`, `↔`) for internal nodes, or `"V"` / `"F"` for leaf nodes that represent substituted variable values.
+    - `boolean valor` — the truth value computed for this node's sub-expression.
+    - `List<NodoArbolEvaluacion> hijos` — immutable list of child nodes (empty for leaves, one child for negation, two for binary operators).
+
+    Helper methods: `etiqueta()`, `valor()`, `hijos()`, and `esHoja()` (returns `true` when `hijos` is empty).
+  </Card>
+  <Card title="ConstructorArbolEvaluacion" icon="sitemap">
+    A `final` utility class with a single public static method:
+
+    `construir(String formula, Map<String, Boolean> valores)` — normalises Unicode symbols to their keyword-alias equivalents, replaces every variable in the formula with its assigned `"true"` or `"false"` literal using a word-boundary regex, then recursively builds the tree by finding the lowest-precedence operator at the top level (depth 0 with respect to parentheses) and splitting there.
+  </Card>
+  <Card title="RenderizadorArbolEvaluacion" icon="terminal">
+    Renders a `NodoArbolEvaluacion` tree as an ASCII diagram for display in the UI's text panel. Each node is printed as `V : <etiqueta>` or `F : <etiqueta>`, with tree-drawing characters (`├──`, `└──`, `│`) representing the branch structure. The root line is preceded by a `"Árbol de evaluación"` header, and the output ends with `"Resultado raíz: V"` or `"Resultado raíz: F"`.
+  </Card>
+</CardGroup>
+
+## Operator precedence
+
+`ConstructorArbolEvaluacion` scans for operators from lowest to highest binding power, so the first operator found at depth 0 becomes the root of the current sub-tree. The precedence order (lowest first) used during tree construction is:
+
+| Priority | Operator | Symbol |
+|----------|----------|--------|
+| 1 (lowest) | Biconditional | `<->` → `↔` |
+| 2 | Implication | `->` → `→` |
+| 3 | Disjunction | `\|\|` → `∨` |
+| 4 | Conjunction | `&&` → `∧` |
+| 5 (highest) | Negation | `!` → `¬` |
+
+Parentheses override this order: the constructor strips a fully-wrapping pair of parentheses and recurses before any operator search, mirroring the semantic grouping in the formula.
+
+## Example tree
+
+For the formula `p→q` with the assignment `p = true, q = false`, the tree looks like this:
+
+```
+Árbol de evaluación
+───────────────────
+
+F : →
+    ├── V : p
+    └── F : q
+
+Resultado raíz: F
+```
+
+The root node carries the operator `→` and the value `false`, because `true → false` is `false`. Its two children are the leaf nodes for `p` (value `true`) and `q` (value `false`).
+
+## Code example
+
+```java
+Map<String, Boolean> vals = Map.of("p", true, "q", false);
+NodoArbolEvaluacion tree = ConstructorArbolEvaluacion.construir("p→q", vals);
+// tree.valor() == false
+// tree.etiqueta() == "→"
+// tree.hijos().get(0).etiqueta() == "V"  (p = true)
+// tree.hijos().get(1).etiqueta() == "F"  (q = false)
+
+String diagram = RenderizadorArbolEvaluacion.renderizar(tree);
+System.out.println(diagram);
+```
+
+For a more complex formula such as `(p→q)∧(q→r)→(p→r)` the same pattern applies — the constructor recurses into each parenthesised sub-expression, producing a fully annotated tree that the student can inspect level by level.
+
+```java
+Map<String, Boolean> vals = Map.of("p", true, "q", false, "r", true);
+NodoArbolEvaluacion tree = ConstructorArbolEvaluacion.construir("(p→q)∧(q→r)→(p→r)", vals);
+String diagram = RenderizadorArbolEvaluacion.renderizar(tree);
+// Root: → [true], because the antecedent conjunction (p→q)∧(q→r) is false (p→q is false),
+// making the whole implication vacuously true.
+```
+
+<Tip>
+  The UI calls `ConstructorArbolEvaluacion.construir` for whichever row the student selects in the truth table panel, passing the formula and the `Map<String, Boolean>` produced by `TablaVerdad.valoresDeFila`. The resulting tree is immediately passed to `RenderizadorArbolEvaluacion.renderizar` and the ASCII output is refreshed in the tree display area in real time — no page reload or extra interaction required.
+</Tip>

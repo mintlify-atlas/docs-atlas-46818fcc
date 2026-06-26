@@ -1,0 +1,94 @@
+---
+title: "Truth Table Generation in TautoTeacher 2.0"
+sidebarTitle: "Truth Tables"
+description: "TablaVerdad builds structured truth table data for propositional formulas with up to four variables, used by the visualization panel."
+---
+
+`TablaVerdad` (in `tautoteacher2.core.logica`) is a utility class that produces structured `Resultado` objects consumed by the UI's **Visualización Clara** panel. This is separate from the plain-text output of `MotorLogico.generarTablaVerdad`: where `MotorLogico` renders a raw tab-separated string for display in the explanation area, `TablaVerdad` builds typed Java records that the visualization panel can iterate over, colour, and interact with. The class is `final` and has a private constructor — all access is through its static factory method `construir`.
+
+## Data model
+
+The two public record types are nested inside `TablaVerdad`:
+
+<CardGroup cols={2}>
+  <Card title="TablaVerdad.Fila" icon="table-rows">
+    Represents a single row in the truth table.
+
+    - `boolean[] valoresVariables` — ordered array of truth values, one entry per variable, in the same alphabetical order as `Resultado.variables`.
+    - `boolean resultadoFormula` — the computed truth value of the formula under this assignment.
+  </Card>
+  <Card title="TablaVerdad.Resultado" icon="table">
+    Encapsulates the complete table.
+
+    - `String formula` — the original formula string as supplied.
+    - `List<String> variables` — immutable, alphabetically sorted list of variable names.
+    - `List<Fila> filas` — immutable list of all 2ⁿ rows.
+    - `String mensajeInformativo` — non-null when no data is available (e.g. validation failed or variable count exceeds the limit); `null` when the table is fully populated.
+    - `boolean tieneDatos()` — convenience helper that returns `true` only when both `variables` and `filas` are non-empty.
+  </Card>
+</CardGroup>
+
+<Note>
+  Both `variables` and `filas` are wrapped in `List.copyOf` inside the `Resultado` compact constructor, making them truly immutable. Any attempt to mutate them at runtime throws `UnsupportedOperationException`.
+</Note>
+
+## Static factory
+
+<ParamField path="TablaVerdad.construir" type="static Resultado">
+  The sole entry point for building a truth table. Its behaviour, step by step:
+
+  1. **Null / blank guard** — returns an empty `Resultado` with a `"No hay fórmula para mostrar."` message if the formula is null or blank.
+  2. **Validation** — delegates to `MotorLogico.tipoFormula` purely for its side-effect of throwing `IllegalArgumentException` on invalid input; the returned type string is discarded. On failure an empty `Resultado` is returned with the exception message.
+  3. **Variable extraction** — uses a `TreeSet<String>` to collect all single-letter matches from the normalised expression. Because `TreeSet` orders entries naturally, the resulting variable list is always alphabetical.
+  4. **Variable-count cap** — if more than 4 variables are found, a `Resultado` with empty `variables` and `filas` is returned immediately, with the message `"La fórmula tiene más de 4 variables; no se muestra la tabla."`.
+  5. **Row enumeration** — iterates over all 2ⁿ combinations using a bit-mask (`i & (1 << j)`), substitutes each variable by name into the normalised expression, and calls `MotorLogico.evaluaParaTablaVerdad` (package-private) to compute the row result.
+  6. Returns a fully populated `Resultado` with `mensajeInformativo` set to `null`.
+</ParamField>
+
+<ParamField path="TablaVerdad.valoresDeFila" type="static Map<String, Boolean>">
+  A convenience method that pairs a variable list with a single `Fila` to produce a `LinkedHashMap<String, Boolean>` keyed by variable name. Because it uses `LinkedHashMap`, the iteration order mirrors the original alphabetical variable order — useful when you need named lookups for tree construction or display.
+
+  ```java
+  Map<String, Boolean> vals = TablaVerdad.valoresDeFila(result.variables(), fila);
+  // vals.get("p") == false, vals.get("q") == true, etc.
+  ```
+</ParamField>
+
+## Code example
+
+```java
+TablaVerdad.Resultado result = TablaVerdad.construir("p∧q");
+for (TablaVerdad.Fila fila : result.filas()) {
+    Map<String, Boolean> vals = TablaVerdad.valoresDeFila(result.variables(), fila);
+    System.out.println(vals + " => " + fila.resultadoFormula());
+}
+```
+
+The loop above prints four lines for the formula `p∧q`:
+
+| p | q | p∧q |
+|---|---|-----|
+| F | F | F |
+| T | F | F |
+| F | T | F |
+| T | T | T |
+
+<Note>
+  Variable ordering is determined by `TreeSet` (natural alphabetical ordering), so variables always appear left to right as `p`, `q`, `r`, `s` — regardless of the order they appear in the formula string. This guarantees a consistent column layout across the truth table and evaluation tree panels.
+</Note>
+
+## Handling the variable cap
+
+When a formula exceeds the four-variable limit, `tieneDatos()` returns `false` and `mensajeInformativo` carries a descriptive message. The UI uses this pattern to decide whether to render the table widget or show the informational message instead:
+
+```java
+TablaVerdad.Resultado result = TablaVerdad.construir("a∧b∧c∧d∧e");
+if (!result.tieneDatos()) {
+    System.out.println(result.mensajeInformativo());
+    // "La fórmula tiene más de 4 variables; no se muestra la tabla."
+}
+```
+
+<Warning>
+  The four-variable cap in `TablaVerdad.construir` is a UI concern only. `MotorLogico.esTautologia` and `MotorLogico.tipoFormula` will still evaluate formulas with any number of variables; only the structured table and text-table outputs are restricted.
+</Warning>

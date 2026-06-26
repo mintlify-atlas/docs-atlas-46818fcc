@@ -1,0 +1,85 @@
+---
+title: "NaturalLexer: Tokenizing Spanish Logic Sentences"
+sidebarTitle: "Natural Lexer"
+description: "NaturalLexer scans normalized Spanish text and emits a sequence of typed tokens — keywords like SI, ENTONCES, Y, and LITERAL fragments — for semantic pattern matching."
+---
+
+`NaturalLexer` (package `tautoteacher2.nlp.lexer`) converts a normalized Spanish string into an ordered list of `TokenNatural` objects. It works as a single-pass, left-to-right scanner: at every position it first tries to match one of the known keyword patterns; only when no keyword matches does it advance character by character to accumulate a `LITERAL` fragment. The keyword list is sorted longest-first so that multi-word connectives like `"si y solo si "` are always recognized before their shorter prefixes like `"si "`.
+
+## Token Types
+
+The `TipoTokenNatural` enum defines every token the lexer can emit. The table below lists each value together with the Spanish keyword or phrase that triggers it.
+
+| Token type | Spanish keyword(s) | Logical role |
+|---|---|---|
+| `SI` | `si` | Conditional antecedent marker |
+| `ENTONCES` | `entonces` | Conditional consequent marker |
+| `Y` | `y` | Conjunction |
+| `O` | `o` | Disjunction |
+| `SIEMPRE_QUE` | `siempre que` | Sufficient-condition variant of `SI` |
+| `CUANDO` | `cuando` | Temporal conditional (read as implication) |
+| `SOLO_SI` | `solo si` | Necessary-condition marker (`P solo si Q` → `P → Q`) |
+| `A_MENOS_QUE` | `a menos que` | Exception marker (`P a menos que Q` → `¬Q → P`) |
+| `SI_Y_SOLO_SI` | `si y solo si` | Biconditional |
+| `EN_CASO_DE_QUE` | `en caso de que` | Alternative conditional phrasing |
+| `LITERAL` | *(any non-keyword fragment)* | Propositional text fragment |
+
+## The TokenNatural Class
+
+Each token emitted by the lexer is a `TokenNatural` instance carrying exactly two fields:
+
+- **`TipoTokenNatural tipo`** — the token classification from the enum above.
+- **`String lexema`** — the matched surface text (trimmed). For keyword tokens this is the keyword without surrounding spaces; for `LITERAL` tokens it is the raw proposition fragment.
+
+`TokenNatural` is immutable: both fields are set in the constructor and exposed via `getTipo()` and `getLexema()`. Its `toString()` method produces readable output like `SI("si")` or `LITERAL("llueve")`, which is useful for debugging pattern matching.
+
+## Keyword Matching Priority
+
+The lexer keeps an internal array of keyword strings ordered from longest to shortest:
+
+```text
+"en caso de que "  →  EN_CASO_DE_QUE
+"si y solo si "    →  SI_Y_SOLO_SI
+"a menos que "     →  A_MENOS_QUE
+"siempre que "     →  SIEMPRE_QUE
+"solo si "         →  SOLO_SI
+"entonces "        →  ENTONCES
+"cuando "          →  CUANDO
+"si "              →  SI
+" y "              →  Y
+" o "              →  O
+```
+
+At each scan position the lexer calls `encontrarPalabraClave()`, which iterates this array in order and checks for a match using `String.regionMatches`. The **first** match wins. This ordering has two important consequences:
+
+1. `"si y solo si"` is recognized as a single `SI_Y_SOLO_SI` token rather than three separate tokens `SI`, `Y`, `SI`.
+2. The conjunctions `" y "` and `" o "` include a leading space in their keyword string, which means they can only match between words — the lexer must attempt keyword matching **before** skipping whitespace, not after, so that `"a y b"` correctly emits `LITERAL("a")`, `Y("y")`, `LITERAL("b")`.
+
+## Elipsis Splitting
+
+When a `LITERAL` follows immediately after `SI`, `SIEMPRE_QUE`, or `CUANDO` and contains multiple words but no internal connective keywords, the lexer applies an elipsis-splitting rule. For three or more words it places the first word as one `LITERAL` and the remainder as a second `LITERAL`, modelling elliptical constructions like *"si estudio apruebo"* (no `ENTONCES` present). The `"no "` prefix is fused with the following word during splitting so that negated fragments like `"no estudio"` remain a single token.
+
+## Usage Example
+
+```java
+NaturalLexer lexer = new NaturalLexer();
+List<TokenNatural> tokens = lexer.tokenizar("si llueve entonces llevo paraguas");
+// [TokenNatural(SI, "si"), TokenNatural(LITERAL, "llueve"),
+//  TokenNatural(ENTONCES, "entonces"), TokenNatural(LITERAL, "llevo paraguas")]
+```
+
+The `tokenizar` method accepts the output of `NormalizadorTexto` directly. Passing a `null` or empty string returns an empty list without throwing.
+
+```java
+// Multi-word connective recognized before shorter prefix
+List<TokenNatural> biconditional = lexer.tokenizar("p si y solo si q");
+// [LITERAL("p"), SI_Y_SOLO_SI("si y solo si"), LITERAL("q")]
+
+// Conjunction correctly split between two literals
+List<TokenNatural> conjuncion = lexer.tokenizar("estudio y descanso");
+// [LITERAL("estudio"), Y("y"), LITERAL("descanso")]
+```
+
+<Note>
+**Regression fix — keyword scanning before whitespace skip.** An earlier version of the scan loop skipped whitespace before attempting keyword matching. This caused `" y "` and `" o "` — whose patterns begin with a space — to never match after a literal, silently swallowing the conjunction into the preceding fragment. The fix was to call `encontrarPalabraClave()` at the current position *before* any whitespace-skipping logic. This is the reason the conjunction keywords are stored with a leading space and the loop ordering matters.
+</Note>

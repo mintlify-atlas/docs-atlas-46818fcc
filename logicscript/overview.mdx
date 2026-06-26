@@ -1,0 +1,92 @@
+---
+title: "LogicScript DSL: Extending TautoTeacher's Language Rules"
+sidebarTitle: "LogicScript"
+description: "LogicScript is TautoTeacher 2.0's declarative DSL for adding Spanish lemmas, morphological rules, and semantic patterns to the NLP pipeline without recompiling Java."
+---
+
+LogicScript is a small declarative language built into TautoTeacher 2.0 that controls how the application maps Spanish natural-language sentences to propositional logic formulas. Rules are written in plain `.lgs` text files and loaded at runtime from the classpath, so you can update vocabulary, morphology, and sentence patterns without touching or recompiling any Java source code. The central file shipped with TautoTeacher is `src/main/resources/logicscript/core.lgs`, currently at schema version `0.6`.
+
+## Directive types
+
+Every non-comment, non-blank line in a `.lgs` file must start with one of three recognized directives. Each directive targets a different layer of the NLP pipeline.
+
+### `lemma`
+
+A `lemma` directive maps a specific inflected or irregular word form to its canonical base form. The canonical form is what gets recorded as a proposition label, so sentences that use different conjugations of the same verb will generate the same symbol.
+
+```text
+lemma llueve -> llover
+lemma apruebo -> aprobar
+```
+
+Use `lemma` for stem-changing verbs (`duerme → dormir`), wholly irregular forms (`apruebo → aprobar`), and fixed nouns or locutions (`solea → hacer_sol`). Regular `-ar` verbs like `estudio` or `trabajo` are handled automatically by the morphological normalizer and do **not** need a `lemma` entry.
+
+### `lexrule`
+
+A `lexrule` directive declares a morphological rule that the normalizer uses to reduce conjugated verb forms to their infinitives. There are two subtypes:
+
+- **`excluir`** — prevents a list of words from ever being treated as verb forms by the morphological engine (e.g. `gorra`, `paraguas`, `lluvia`).
+- **`sufijo ... infinitivo ar|er|ir`** — strips the named suffix and appends the infinitive-class vowel to reconstruct the base form.
+- **`sufijo ... heuristica primera_persona`** — applies a stem-analysis heuristic for first-person singular `-o` endings where the class cannot be determined from the suffix alone.
+
+Rules are evaluated in declaration order; the first matching rule wins.
+
+### `pattern`
+
+A `pattern` directive defines a named token-sequence template and the intermediate-representation (IR) node type that should be emitted when the template matches. Each pattern specifies `left=`, `right=`, and optionally `mid=` as zero-based indices into the matched token list that point to the `literal` operand positions.
+
+```text
+pattern SI_ENTONCES si literal entonces literal => imp left=1 right=3
+pattern CONJUNCION  literal y literal           => and left=0 right=2
+```
+
+Patterns are matched in declaration order; the first match wins.
+
+## Minimal `.lgs` example
+
+The accordion below shows a complete self-contained `.lgs` file that exercises all three directive types.
+
+<Accordion title="Complete minimal core.lgs example">
+```text
+version 0.6
+
+lexrule excluir gorra paraguas
+lexrule sufijo aba infinitivo ar
+lexrule sufijo o heuristica primera_persona
+
+lemma llueve -> llover
+lemma apruebo -> aprobar
+
+pattern SI_ENTONCES si literal entonces literal => imp left=1 right=3
+pattern CONJUNCION literal y literal => and left=0 right=2
+```
+</Accordion>
+
+## Loading strategy
+
+At startup, `LogicScriptEngine` calls `LgsCargador.cargarConDiagnostico("logicscript/core.lgs")`, which resolves the path against the thread-context class loader. There are three possible outcomes:
+
+| `EstadoCargaLgs` value | Outcome |
+|---|---|
+| `EXITO` | File parsed successfully; all lemmas, lexrules, and patterns are active. |
+| `RECURSO_NO_ENCONTRADO` | File not on the classpath. The engine logs a warning and falls back to lemmas and patterns embedded in Java code. Translation continues. |
+| `ERROR_SINTAXIS` / `ERROR_LECTURA` | Unrecoverable parse error. Translation is blocked and an error result is returned immediately. |
+
+When building manually (without the provided `compile.ps1` script), copy `src/main/resources/` into your output directory so that `logicscript/core.lgs` appears at `out/logicscript/core.lgs` and the class loader can find it.
+
+## Explore further
+
+<CardGroup cols={2}>
+  <Card title="Engine & Service" icon="gear" href="/logicscript/engine">
+    How `LogicScriptEngine` and `LogicScriptService` orchestrate the full NLP-to-formula pipeline.
+  </Card>
+  <Card title="core.lgs Reference" icon="file-code" href="/logicscript/core-lgs">
+    Complete reference for every directive in the shipped `core.lgs` file.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/logicscript/cli">
+    Translate and evaluate sentences from the command line with `LogicScriptCli`.
+  </Card>
+  <Card title="Regression Tests" icon="vial" href="/logicscript/regression">
+    Run the 39-case regression harness to guard against pipeline regressions.
+  </Card>
+</CardGroup>

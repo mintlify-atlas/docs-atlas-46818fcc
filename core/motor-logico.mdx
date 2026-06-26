@@ -1,0 +1,80 @@
+---
+title: "MotorLogico: Propositional Formula Evaluator"
+sidebarTitle: "MotorLogico"
+description: "MotorLogico evaluates propositional logic formulas by brute-force truth assignment, classifying them as tautologies, contradictions, or contingencies."
+---
+
+`MotorLogico` is the central evaluation engine found in the `tautoteacher2.core.logica` package. It handles the complete lifecycle of propositional formula analysis: syntax validation, variable extraction, exhaustive truth-value enumeration via a 2ⁿ brute-force loop, and semantic classification. All of its public methods are static, so no instantiation is required — you call the class directly as a utility.
+
+## Supported symbols
+
+TautoTeacher 2.0 accepts both the canonical Unicode logical symbols and convenient keyboard aliases. The UI automatically converts the aliases before any formula is passed to `MotorLogico`, so you never need to type Unicode manually.
+
+| Symbol | Keyboard alias | Meaning |
+|--------|---------------|---------|
+| `∧` | `&&` | Logical conjunction (AND) |
+| `∨` | `\|\|` | Logical disjunction (OR) |
+| `¬` | `!` | Logical negation (NOT) |
+| `→` | `->` | Material implication (IF…THEN) |
+| `↔` | `<->` | Biconditional (IF AND ONLY IF) |
+
+<Note>
+  The UI auto-converts keyboard aliases (`&&`, `||`, `!`, `->`, `<->`) to their Unicode equivalents before calling `MotorLogico`. If you are calling the engine programmatically, you can supply either form — the engine normalises aliases internally before processing.
+</Note>
+
+## Public API
+
+<ParamField path="esTautologia" type="static boolean">
+  Evaluates whether a formula is a tautology by iterating over all 2ⁿ possible truth assignments, where *n* is the number of distinct propositional variables found in the formula. Each iteration substitutes variable names with `true` / `false` literals and delegates to the internal recursive evaluator. The method returns `true` only if every single assignment produces a `true` result; it short-circuits and returns `false` the moment any counterexample is found.
+
+  Throws `IllegalArgumentException` when:
+  - The formula contains unbalanced parentheses.
+  - The formula contains characters outside `[a-zA-Z∧∨¬→↔()\s]`.
+  - The formula contains no propositional variables at all.
+</ParamField>
+
+<ParamField path="tipoFormula" type="static String">
+  Performs the same 2ⁿ enumeration as `esTautologia` but tracks both whether at least one assignment yields `true` and at least one yields `false`, short-circuiting as soon as both flags are set. Based on those flags it returns exactly one of three string constants:
+
+  - `"TAUTOLOGÍA"` — every assignment is true.
+  - `"CONTRADICCIÓN"` — every assignment is false.
+  - `"CONTINGENCIA"` — some assignments are true and some are false.
+</ParamField>
+
+<ParamField path="generarExplicacionEducativa" type="static String">
+  Builds a human-readable, Spanish-language proof-by-refutation narrative intended for the **Explanation** panel in the UI. The method first attempts to decompose the formula at its principal connective: if the outermost operator is an implication (`→`) it reconstructs a step-by-step refutation proof, assuming the antecedent is true and the consequent is false and deriving a contradiction. If the outermost operator is a biconditional (`↔`) it explains that both sides must share the same truth value in every interpretation. The `esTautologia` boolean parameter controls the concluding verdict. If the formula does not have a recognised top-level structure the method falls back to a short general summary.
+</ParamField>
+
+<ParamField path="generarTablaVerdad" type="static String">
+  Returns a plain-text, tab-separated truth table for the formula, limited to formulas with **four or fewer** variables. The table header lists each variable name followed by the original formula string, and each subsequent row shows `V` or `F` for every variable assignment plus the computed formula result. If the formula fails validation the method returns an empty string rather than throwing. If the formula has more than four variables it returns a header block followed by a single line stating the table is not shown.
+</ParamField>
+
+<ParamField path="evaluarExpresionSustituida" type="static boolean">
+  A lower-level utility that evaluates a fully substituted expression string — one that contains only the literals `true` and `false` combined with the keyword-alias operators (`&&`, `||`, `!`, `->`, `<->`). It delegates directly to the internal recursive `evaluaExpresion` engine, which resolves parentheses first, then processes operators in lowest-to-highest precedence order: `<->`, `->`, `||`, `&&`, `!`. This method is also used by `ConstructorArbolEvaluacion` when it needs to evaluate leaf nodes during tree construction.
+</ParamField>
+
+## Code example
+
+```java
+String tipo = MotorLogico.tipoFormula("(p→q)∧(q→r)→(p→r)");
+// returns "TAUTOLOGÍA"
+```
+
+```java
+boolean esTauto = MotorLogico.esTautologia("p∧¬p");
+// returns false — "p∧¬p" is a contradiction
+
+String tabla = MotorLogico.generarTablaVerdad("p→q");
+// returns a formatted tab-separated table with 4 rows
+```
+
+## Validation
+
+Before any evaluation takes place, every public method calls the private `validarSintaxis` helper, which enforces two rules:
+
+1. **Balanced parentheses** — the method walks the formula character by character, maintaining a running depth counter. An opening `(` increments the counter; a closing `)` decrements it. If the counter ever drops below zero, or if it is non-zero at the end, an `IllegalArgumentException` is thrown with the message `"Paréntesis no balanceados"`.
+2. **Allowed character set** — the entire formula must match the regular expression `^[a-zA-Z∧∨¬→↔()\s]+$`. Any character outside this set causes an `IllegalArgumentException` with the message `"Caracteres no válidos en la expresión"`.
+
+<Warning>
+  Formulas with more than 4 variables are still fully evaluated by `esTautologia` and `tipoFormula` — the 2ⁿ loop scales to any number of variables, though performance degrades exponentially. However, `generarTablaVerdad` enforces a hard cap: when more than 4 variables are detected it immediately returns the message `"(No se muestra: la fórmula tiene más de 4 variables.)"` without computing any rows.
+</Warning>

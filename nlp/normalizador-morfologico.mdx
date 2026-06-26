@@ -1,0 +1,91 @@
+---
+title: "Morphological Normalizer for Spanish Verbs"
+sidebarTitle: "Morphological Normalizer"
+description: "NormalizadorMorfologico reduces conjugated Spanish verb forms to their infinitives using suffix rules and irregular lemma tables, unifying proposition labels."
+---
+
+Spanish morphological inflection is a direct challenge for proposition labeling: `llueve`, `llueva`, and `llovió` are all conjugations of the same verb *llover*, yet a naïve pipeline would assign each form its own distinct proposition symbol. `NormalizadorMorfologico` (package `tautoteacher2.nlp.lexicon`) solves this by mapping every conjugated form back to its infinitive before a symbol is assigned, so that all three forms produce the same label `llover` and therefore the same `AtomExpr` node in the IR.
+
+## Two-Layer Approach
+
+Canonicalization of a single word goes through two ordered layers before falling back to the identity.
+
+**Layer 1 — Lemma table (highest priority).** The `BaseConocimiento` class loads explicit `lemma` entries from `core.lgs` at startup. These cover irregular verbs and special cases where heuristic suffix rules would produce the wrong result: for example `llueve → llover` (the stem changes from *lluev-* to *llov-*), `apruebo → aprobar`, and `solea → hacer_sol` (a locution). Lemma lookup is an exact `HashMap` get — O(1) and unambiguous.
+
+**Layer 2 — Suffix rules (`lexrule` / `reglasPredeterminadas()`).** If no lemma matches, `NormalizadorMorfologico.normalizar()` walks an ordered list of `ReglaMorfologicaLgs` rule objects and applies the first one whose suffix matches the end of the word. A rule strips the matched suffix, optionally checks a stem condition, and appends the infinitive vowel + `"r"` to produce a candidate infinitive. Rules are checked longest-suffix-first so that longer endings like `-amos` are not shadowed by `-s`.
+
+**Layer 3 — Identity fallback.** If neither a lemma nor any suffix rule produces a result, the word is returned unchanged. The semantic pipeline still proceeds normally; the proposition label simply uses the conjugated form as written.
+
+## Priority Order in `BaseConocimiento.canonicalizarPalabra()`
+
+```text
+1. Lemma in core.lgs         →  apruebo  → aprobar   (irregular)
+2. Morphological suffix rule  →  estudio  → estudiar  (regular -ar)
+3. Identity                   →  gorra    → gorra     (no rule applies)
+```
+
+Words that already end in `-ar`, `-er`, or `-ir` (minimum length 4) are treated as infinitives and returned immediately without further processing.
+
+## Suffix Rules Table
+
+The default rules embedded in `reglasPredeterminadas()` are listed below. Rules are applied in the order shown; the first match wins.
+
+| Suffix(es) | Infinitive vowel | Example |
+|---|---|---|
+| `-iaria` | `a` | estudiaría → estudiar |
+| `-aria` | `a` | hablaría → hablar |
+| `-iaba` | `a` | estudiaba (alt.) → estudiar |
+| `-abas` | `a` | estudiabas → estudiar |
+| `-aban` | `a` | estudiaban → estudiar |
+| `-amos` | `a` | estudiamos → estudiar |
+| `-ais` | `a` | estudiáis → estudiar |
+| `-aron` | `a` | estudiaron → estudiar |
+| `-aran` | `a` | estudiaran → estudiar |
+| `-are` | `a` | estudiare → estudiar |
+| `-aba` | `a` | estudiaba → estudiar |
+| `-ado` | `a` | estudiado → estudiar |
+| `-ada` | `a` | estudiada → estudiar |
+| `-emos` | `e` | corremos → correr |
+| `-eis` | `e` | correís → correr |
+| `-imos` | `i` | vivimos → vivir |
+| `-an` | `a` | estudian → estudiar |
+| `-as` | `a` | estudias → estudiar |
+| `-a` | `a` | estudia → estudiar |
+| `-o` | heuristic | estudio → estudiar |
+
+## First-Person Heuristic (`-o` Suffix)
+
+The last rule in the default list — suffix `-o` — uses a different strategy because the first-person singular present can belong to `-ar`, `-er`, or `-ir` verbs and there is no morphological signal in the ending alone. The `infinitivoDesdePrimeraPersona()` helper inspects the stem:
+
+- **Stem ends in a vowel** → append `ar` (e.g., *estudio* → *estudiar*, stem *estudi-*).
+- **Stem ends in `rm`, `mm`, `rc`, or `rt`** → append `ir` (e.g., *duermo* → *dormir*, stem *duerm-*).
+- **All other consonant-final stems** → append `ar` as the most common case (e.g., *llego* → *llegar*, *descanso* → *descansar*).
+
+This heuristic handles the majority of regular `-ar` verbs correctly and catches several common `-ir` verbs via the special-stem list. Irregular verbs with vowel-changing stems (such as *duerme* → *dormir*, where the stem is *duerm-* rather than *dorm-*) still require an explicit `lemma` entry in `core.lgs`.
+
+## Exclusion List
+
+Certain domain nouns end in vowels or common suffixes that would otherwise be misidentified as verb forms. The default `exclusionesPredeterminadas()` set protects the following words from suffix processing:
+
+`gorra`, `sombrero`, `paraguas`, `calor`, `frio`, `sol`, `cielo`, `nube`, `nubes`, `lluvia`, `examen`, `clase`
+
+Without this list, `gorra` would be incorrectly normalized to `gorrar` by the `-a` suffix rule.
+
+## Public Method Signatures
+
+```java
+// Default constructor — uses reglasPredeterminadas() and exclusionesPredeterminadas()
+NormalizadorMorfologico nm = new NormalizadorMorfologico();
+
+nm.normalizar("estudio");   // → "estudiar"   (suffix -o heuristic, stem ends in vowel)
+nm.normalizar("estudian");  // → "estudiar"   (suffix -an)
+nm.normalizar("duerme");    // → "dormir"     (via lemma in BaseConocimiento)
+nm.normalizar("gorra");     // → "gorra"      (excluded from verb processing)
+nm.normalizar("estudiar");  // → "estudiar"   (already an infinitive, returned as-is)
+```
+
+The method accepts the output of `NormalizadorTexto` directly: lower-case, accent-free strings. A `null` or blank input returns `""`.
+
+<Tip>
+You can override or extend the default suffix rules **without recompiling Java** by adding `lexrule` directives to `core.lgs` (Fase C of the lexical roadmap). When `NormalizadorMorfologico` is constructed with a `ConfiguracionMorfologiaLgs` loaded from the file, the file-declared rules replace the embedded defaults entirely. This lets course maintainers add domain-specific conjugation patterns declaratively and redeploy only the resource file.
+</Tip>

@@ -1,0 +1,55 @@
+---
+title: "NLP Pipeline: Spanish to Propositional Logic"
+sidebarTitle: "NLP Overview"
+description: "TautoTeacher 2.0's rule-based NLP pipeline normalizes, tokenizes, and semantically maps Spanish sentences to propositional logic formulas without machine learning."
+---
+
+TautoTeacher 2.0 can take a raw Spanish sentence such as *"si llueve entonces llevo paraguas"* and automatically produce the propositional formula `(llover → llevar)`. The transformation runs entirely through deterministic, rule-based code — no machine learning, no external services. A raw sentence enters the pipeline, passes through four sequential stages, and exits as a structured `LogicExpr` IR node ready for formula emission or tautology checking.
+
+<Steps>
+  <Step title="Text Normalization — NormalizadorTexto">
+    `NormalizadorTexto` (package `tautoteacher2.nlp.normalizacion`) prepares the raw input for downstream stages. It lowercases the text, strips combining diacritical marks (accents) using Unicode NFD decomposition, normalizes semicolons and colons to commas, and collapses all runs of whitespace to a single space. The result is a clean, accent-free, lower-case string that every later stage can rely on.
+  </Step>
+  <Step title="Lexical Tokenization — NaturalLexer">
+    `NaturalLexer` (package `tautoteacher2.nlp.lexer`) scans the normalized text left-to-right. It checks for keyword tokens first — multi-word connectives like `"si y solo si "` and `"en caso de que "` are matched before shorter ones like `"si "` — ensuring no keyword is accidentally absorbed into an adjacent literal. Text that is not a keyword becomes a `LITERAL` token representing a proposition fragment (e.g., `"llueve"` or `"llevo paraguas"`).
+  </Step>
+  <Step title="Morphological Normalization — NormalizadorMorfologico + BaseConocimiento">
+    `NormalizadorMorfologico` (package `tautoteacher2.nlp.lexicon`), coordinated by `BaseConocimiento`, reduces conjugated verb forms to their canonical infinitives so that `llueve`, `llueva`, and `llovió` all map to the same proposition label `llover`. It works in two layers: an explicit lemma table loaded from `core.lgs` handles irregular verbs and exceptions, while suffix rules handle regular conjugations. The identity fallback is used when neither layer matches.
+  </Step>
+  <Step title="Semantic Mapping — SemanticMapper">
+    `SemanticMapper` (package `tautoteacher2.nlp.semantica`) receives the token list and matches it against an ordered catalogue of `PatronSemanticoLgs` patterns. Each pattern describes an exact token-type sequence (e.g., `SI LITERAL ENTONCES LITERAL`) and maps it to an IR node type (`IMP`, `AND`, `OR`, `EQUIV`, etc.). The matched tokens' lexemas are canonicalized by `BaseConocimiento` and wrapped in `AtomExpr` leaves. The final result is a `LogicExpr` IR tree that `EmitidorFormula` can render as a Unicode formula string.
+  </Step>
+</Steps>
+
+## End-to-End Example
+
+The following table traces the sentence `"si llueve entonces llevo paraguas"` through every pipeline stage.
+
+| Stage | Output |
+|---|---|
+| **Raw input** | `si llueve entonces llevo paraguas` |
+| **After NormalizadorTexto** | `si llueve entonces llevo paraguas` |
+| **After NaturalLexer** | `[SI("si"), LITERAL("llueve"), ENTONCES("entonces"), LITERAL("llevo paraguas")]` |
+| **Pattern matched** | `SI_ENTONCES` → IR type `IMP` |
+| **After canonicalization** | antecedent `llueve → llover`, consequent `llevo → llevar` |
+| **IR tree** | `ImpExpr(AtomExpr("llover"), AtomExpr("llevar"))` |
+| **Emitted formula** | `(llover → llevar)` |
+
+The example shows why morphological normalization matters: without the lemma entries for `llueve` and `llevo`, the proposition labels would be the raw conjugated forms, making formula comparisons fragile across different phrasings of the same idea.
+
+## Explore the Pipeline Stages
+
+<CardGroup cols={2}>
+  <Card title="Natural Lexer" icon="scanner" href="/nlp/lexer">
+    Token types, keyword priority, and the `NaturalLexer` scanning algorithm.
+  </Card>
+  <Card title="Morphological Normalizer" icon="language" href="/nlp/normalizador-morfologico">
+    Suffix rules, lemma tables, and the two-layer canonicalization strategy.
+  </Card>
+  <Card title="Semantic Mapper" icon="diagram-project" href="/nlp/semantic-mapper">
+    Named patterns, IR node types, and fallback behavior.
+  </Card>
+  <Card title="LogicScript Core" icon="file-code" href="/logicscript/core-lgs">
+    The `core.lgs` file format: `lemma`, `lexrule`, and `pattern` directives.
+  </Card>
+</CardGroup>

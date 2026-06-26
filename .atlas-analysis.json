@@ -1,0 +1,91 @@
+{
+  "projectType": "general",
+  "projectName": "TautoTeacher 2.0",
+  "projectDescription": "An educational Java tool for propositional logic that translates natural-language Spanish statements into formal logical formulas, evaluates them as tautologies, contradictions, or contingencies, and generates truth tables and step-by-step explanations.",
+  "theme": "palm",
+  "primaryColor": "#4f46e5",
+  "lightColor": "#818cf8",
+  "darkColor": "#312e81",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Logic Engine",
+            "pages": [
+              "core/motor-logico",
+              "core/tabla-verdad",
+              "core/arbol-evaluacion"
+            ]
+          },
+          {
+            "group": "Natural Language Processing",
+            "pages": [
+              "nlp/overview",
+              "nlp/lexer",
+              "nlp/normalizador-morfologico",
+              "nlp/semantic-mapper"
+            ]
+          },
+          {
+            "group": "LogicScript",
+            "pages": [
+              "logicscript/overview",
+              "logicscript/engine",
+              "logicscript/core-lgs",
+              "logicscript/cli",
+              "logicscript/regression"
+            ]
+          },
+          {
+            "group": "User Interface",
+            "pages": [
+              "ui/overview",
+              "ui/modes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Propositional formula evaluation: tautology, contradiction, contingency detection",
+    "NLP pipeline (no ML) to translate Spanish natural language into logic formulas",
+    "Truth table generation for formulas with up to 4 variables",
+    "Evaluation tree visualization for step-by-step logical reasoning",
+    "LogicScript DSL (.lgs) for declarative lemma, lexrule, and semantic pattern definitions",
+    "LogicScript CLI for command-line natural language translation and evaluation",
+    "Morphological normalizer for Spanish verb conjugation reduction to infinitives",
+    "Swing-based GUI with natural-language and formula input modes",
+    "Educational explanation builder that produces human-readable proofs"
+  ],
+  "publicApiSurface": [
+    "MotorLogico.esTautologia(String formula)",
+    "MotorLogico.tipoFormula(String formula)",
+    "MotorLogico.generarExplicacionEducativa(String formula, boolean esTautologia)",
+    "MotorLogico.generarTablaVerdad(String formula)",
+    "TablaVerdad.construir(String formula)",
+    "LogicScriptEngine.traducir(String textoOriginal)",
+    "LogicScriptService.traducir(String textoOriginal)",
+    "LogicScriptResult.isExito()",
+    "LogicScriptResult.getFormula()",
+    "LogicScriptResult.getProposiciones()",
+    "LogicScriptResult.getPasosDeAnalisis()",
+    "LogicScriptCli.main(String[] args)",
+    "LogicScriptRegressionHarness.main(String[] args)",
+    "NormalizadorMorfologico.normalizar(String palabra)",
+    "SemanticMapper.mapearBloque(String textoBloque, List<TokenNatural> tokens, List<String> pasosDeAnalisis)",
+    "ConstructorArbolEvaluacion.construir(String formula, Map<String, Boolean> valores)",
+    "ExplicacionEducativaBuilder.construir(...)",
+    "LgsCargador.cargarConDiagnostico(String recurso)"
+  ]
+}

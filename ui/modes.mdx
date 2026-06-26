@@ -1,0 +1,113 @@
+---
+title: "Formula Mode and Natural Language Mode"
+sidebarTitle: "Input Modes"
+description: "TautoTeacher 2.0 supports two input modes: direct propositional formula entry and Spanish natural-language sentences translated via the LogicScript pipeline."
+---
+
+`PanelEntradaNatural` exposes two input modes selectable via a `JTabbedPane` in the GUI: **Fórmula lógica** (tab index 0) and **Lenguaje natural** (tab index 1). `TautoTeacherApp` reads `panelEntrada.getModoEntrada()` when the **✔ Verificar Tautología** button is pressed and routes processing to one of two completely different code paths — direct formula evaluation or the full LogicScript NLP pipeline. Each mode produces the same end result (a classified verdict, a truth table, and an educational explanation), but the journey from input to formula differs significantly.
+
+<Tabs>
+  <Tab title="Formula Mode">
+    In Formula Mode the user types a propositional formula directly into the **Fórmula lógica** tab's text area. A toolbar of clickable symbol buttons (¬ ∧ ∨ → ↔ and parentheses) inserts symbols at the current caret position, so users who cannot type Unicode operators can still compose well-formed formulas.
+
+    ### Keyboard alias normalization
+
+    Before the formula is evaluated, `TautoTeacherApp.normalizarSimbolosTeclado` replaces common keyboard shorthands with their Unicode equivalents. Replacements are applied in the order listed — multi-character sequences (e.g. `<->`) are replaced before their sub-sequences (e.g. `->`) to avoid partial matches.
+
+    | Typed input | Normalized to |
+    |---|---|
+    | `<->` | ↔ |
+    | `<=>` | ↔ |
+    | `->` | → |
+    | `&&` | ∧ |
+    | `^` | ∧ |
+    | `\|\|` | ∨ |
+    | `~` | ¬ |
+    | `!` | ¬ |
+
+    Consecutive whitespace is also collapsed to a single space after symbol replacement.
+
+    **Example:** typing `(p->q)&&(q->r)->(p->r)` is normalized to `(p→q)∧(q→r)→(p→r)` before evaluation.
+
+    ### Evaluation path
+
+    Once normalized, the formula goes directly to the logic engine — no NLP processing is involved:
+
+    ```java
+    String formula = normalizarSimbolosTeclado(panelEntrada.getTextoFormula().trim());
+    String tipo = MotorLogico.tipoFormula(formula);
+    ```
+
+    `MotorLogico.tipoFormula` returns one of the three classification strings: `"TAUTOLOGÍA"`, `"CONTRADICCIÓN"`, or `"CONTINGENCIA"`. Because no proposition map exists in this path, `ExplicacionEducativaBuilder.construir` is called with `Map.of()` — symbol substitution in the educational panel is therefore skipped, and the formula is displayed as-is.
+  </Tab>
+
+  <Tab title="Natural Language Mode">
+    In Natural Language Mode the user types a sentence in Spanish — for example, `"si llueve entonces llevo paraguas"` — into the **Lenguaje natural** tab's text area. The sentence is sent to the LogicScript NLP pipeline, which translates it into a propositional formula with a labelled proposition map before any logical evaluation takes place.
+
+    ### Translation pipeline
+
+    ```java
+    LogicScriptResult traduccion = logicScriptService.traducir(enunciado);
+    ```
+
+    `LogicScriptService.traducir` runs the full LogicScript pipeline and returns a `LogicScriptResult` containing:
+
+    - `isExito()` — whether translation succeeded.
+    - `getFormula()` — the propositional formula derived from the sentence (e.g. `p→q`).
+    - `getProposiciones()` — a `Map<String, String>` from lemma to symbol (e.g. `{"llover" → "p", "llevar_paraguas" → "q"}`).
+    - `getPasosDeAnalisis()` — an ordered `List<String>` tracing every decision the pipeline made.
+    - `getMensaje()` — a human-readable error description when `isExito()` is `false`.
+
+    On a successful translation the formula and proposition map are extracted, the formula is passed to `MotorLogico.tipoFormula`, and the full results are displayed.
+
+    ### Dubious-translation warning
+
+    After a successful translation, `TautoTeacherApp` scans the analysis steps for the word `"fallback"`:
+
+    ```java
+    boolean traduccionDudosa = usoFallback(traduccion.getPasosDeAnalisis());
+    ```
+
+    If any step contains `"fallback"` (case-insensitive), it means the pipeline could not match the sentence to a known connective pattern and fell back to wrapping the whole sentence as a plain propositional atom. In this case, an **Advertencia** block is appended to the technical section of the educational explanation, warning the student that the sentence structure may not have been fully captured.
+  </Tab>
+</Tabs>
+
+## Error handling
+
+<Warning>
+  All error paths clear the visualization panel and the educational content area so stale results from a previous successful evaluation are never left on screen alongside a new error message.
+</Warning>
+
+| Situation | Behaviour |
+|---|---|
+| **Empty input** | Result panel shows `"Por favor ingrese una expresión lógica para verificar."` (Formula Mode) or `"Por favor ingrese un enunciado."` (Natural Language Mode) in red (`#dc3545`). |
+| **Translation failure** | Result panel shows `"No pude interpretar el enunciado con las reglas actuales de LogicScript.\n"` followed by `LogicScriptResult.getMensaje()`. The educational panel renders the full error explanation including all analysis steps logged by the pipeline, to help diagnose why the sentence could not be mapped to a formula. |
+| **Logic engine exception** | Result panel shows `"Error al analizar la expresión: "` or `"Error al analizar el enunciado: "` followed by the exception message in red. |
+
+## Proposition display
+
+When Natural Language Mode produces a successful translation, `TautoTeacherApp` calls `formatearMapaProposiciones` to build a readable legend of the symbol-to-lemma mapping for the technical section of the educational panel:
+
+```java
+private static String formatearMapaProposiciones(Map<String, String> proposiciones) {
+    StringBuilder sb = new StringBuilder("Proposiciones:\n");
+    for (Map.Entry<String, String> e : proposiciones.entrySet()) {
+        sb.append("  ").append(e.getValue()).append(" = ").append(e.getKey()).append("\n");
+    }
+    return sb.append("\n").toString();
+}
+```
+
+This produces output such as:
+
+```text
+Proposiciones:
+  llover = p
+  llevar_paraguas = q
+```
+
+The mapping helps students bridge the gap between the abstract formula (`p→q`) and the original natural-language sentence, making it clear exactly which real-world proposition each symbol represents. The same map is also passed to `PanelVisualizacion`, where it is used to annotate table column headers and the interpretation dropdown with the corresponding lemmas.
+
+<Tip>
+  When using Natural Language Mode, the **Pasos de análisis** section shown at the bottom of the **Explicación** panel traces every decision the LogicScript pipeline made — which connective patterns were tried, which matched, and whether a fallback was triggered. This makes it a valuable teaching tool for understanding why a particular translation was chosen and how to rephrase ambiguous sentences for better results.
+</Tip>

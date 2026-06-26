@@ -1,0 +1,102 @@
+---
+title: "TautoTeacher 2.0 Architecture and Module Overview"
+sidebarTitle: "Architecture"
+description: "Understand how TautoTeacher 2.0 separates concerns into four layers: logic engine, NLP pipeline, LogicScript DSL, and the Swing user interface."
+---
+
+TautoTeacher 2.0 is structured around four independent layers, each housed in its own Java package family. The **Core Logic Engine** owns formula evaluation and truth table generation. The **NLP Pipeline** converts Spanish natural language into a token stream. The **LogicScript** layer provides a domain-specific language that ties the NLP output to the logic engine through an intermediate representation. The **User Interface** layer presents input controls and results through a Swing desktop window. No layer reaches across its boundary directly — all cross-layer communication flows through well-defined service classes.
+
+## Layer Overview
+
+<CardGroup cols={2}>
+  <Card title="Core Logic Engine" icon="gears">
+    **Package:** `tautoteacher2.core.logica`
+
+    The engine is the heart of TautoTeacher. It receives a propositional formula string (using Unicode connectives `∧ ∨ ¬ → ↔`) and:
+
+    - **Parses** it into an AST via `ParserLogica` and `NodoAST`, using the operator precedence defined in `Operador`.
+    - **Validates** syntax with `ValidadorFormula` (balanced parentheses, valid character set).
+    - **Evaluates** all 2ⁿ truth-value combinations through `MotorLogico.esTautologia()` and `MotorLogico.tipoFormula()`, returning `TAUTOLOGÍA`, `CONTRADICCIÓN`, or `CONTINGENCIA`.
+    - **Generates** a full truth table via `TablaVerdad.construir()` and the underlying `GeneradorTablaVerdad`.
+    - **Builds** an evaluation tree (`ConstructorArbolEvaluacion`, `NodoArbolEvaluacion`) that `RenderizadorArbolEvaluacion` renders in the visualization panel.
+    - **Produces** educational explanations with `ExplicacionEducativaBuilder`, including a refutation-style proof for implication and equivalence formulas.
+  </Card>
+
+  <Card title="NLP Pipeline" icon="language">
+    **Package:** `tautoteacher2.nlp`
+
+    The NLP pipeline processes a raw Spanish sentence through four sequential stages — none of which require a trained machine-learning model:
+
+    1. **Text normalization** (`NormalizadorTexto`) — lowercase conversion, accent normalization, punctuation handling.
+    2. **Lexer tokenization** (`NaturalLexer`, `LexerNatural`) — splits the normalized text into typed tokens (`TipoToken`, `TipoTokenNatural`), recognizing connective keywords, atomic-proposition spans, and negation markers.
+    3. **Morphological normalization** (`NormalizadorMorfologico`) — applies suffix rules loaded from `core.lgs` (e.g., `-ado → -ar`) to map inflected verb forms to their canonical infinitives, handled by `ConfiguracionMorfologiaLgs` and `ReglaMorfologicaLgs`.
+    4. **Semantic mapping** (`SemanticMapper`, `MapeadorSemantico`) — matches the token sequence against structural patterns (`PatronSemanticoLgs`, `ReglasPatron`) to identify connective roles and map atomic spans to propositional variables via `RegistroProposiciones`.
+
+    The lexicon and pattern definitions (`BaseConocimiento`, `Lexico`, `DiccionarioSinonimos`) are loaded at startup from `core.lgs` by `LgsCargador`, which produces a `ContenidoLgs` object and reports loading errors through `ResultadoCargaLgs` and `EstadoCargaLgs`.
+  </Card>
+
+  <Card title="LogicScript DSL" icon="terminal">
+    **Package:** `tautoteacher2.logicscript`
+
+    LogicScript is TautoTeacher's lightweight domain-specific language layer. It coordinates the NLP pipeline and the logic engine and exposes the translation result through a uniform `LogicScriptResult` value object (formula string, proposition map, analysis steps, success flag, and error message).
+
+    Key components:
+
+    - **`LogicScriptEngine`** — orchestrates the full translation pipeline for a single natural-language input string.
+    - **`LogicScriptService`** — a thin facade that the UI and CLI both call; its `traducir(String)` method is the single public entry point.
+    - **`LogicScriptCli`** — standalone `main` class for command-line use; prints the formula, proposition map, analysis steps, and `MotorLogico` classification.
+    - **`LogicScriptRegressionHarness`** — self-contained test runner with 39 cases; exits non-zero on any failure.
+    - **IR expressions** (`tautoteacher2.logicscript.ir`) — `LogicExpr` interface implemented by `AtomExpr`, `NegExpr`, `AndExpr`, `OrExpr`, `ImpExpr`, and `EquivExpr`; `EmitidorFormula` walks the IR tree to emit the Unicode formula string.
+    - **`RegistroProposiciones`** — assigns and tracks single-letter variable names (`p`, `q`, `r`, …) for atomic proposition spans during a single translation run.
+  </Card>
+
+  <Card title="User Interface" icon="display">
+    **Package:** `tautoteacher2.ui`
+
+    The UI layer is a pure Swing application with no direct references to the logic engine or NLP classes. It delegates all processing to `LogicScriptService` and `MotorLogico` through `TautoTeacherApp`:
+
+    - **`TautoTeacherApp`** — the application controller; wires panels together, handles the Procesar action, dispatches to formula mode or natural-language mode, and converts ASCII keyboard shortcuts to Unicode connectives via `normalizarSimbolosTeclado()`.
+    - **`VentanaPrincipal`** — the top-level `JFrame`; hosts the input panel, result panel, educational content area, and visualization panel.
+    - **`PanelEntradaNatural`** — provides the mode toggle (formula vs. natural language) and text input fields.
+    - **`PanelResultadoLogico`** — displays the classification dictamen with color coding: green for tautology, red for contradiction, dark text for contingency.
+    - **`PanelVisualizacion`** — renders the truth table grid and evaluation tree using data from `TablaVerdad` and `ConstructorArbolEvaluacion`.
+    - **`IconosApp`** — loads the application icon from `resources/icons/app-icon.png`.
+  </Card>
+</CardGroup>
+
+## Data Flow
+
+The following diagram shows how a user input travels through the system to produce a classified result:
+
+```text
+User Input
+    │
+    ├── Formula mode ──► MotorLogico ──► TablaVerdad / ConstructorArbolEvaluacion
+    │                         │
+    │                         └──► ExplicacionEducativaBuilder
+    │
+    └── NL mode ──► NormalizadorTexto ──► NaturalLexer ──► NormalizadorMorfologico
+                          ──► SemanticMapper ──► EmitidorFormula
+                                │
+                                └──► LogicScriptResult (formula + propositions)
+                                              │
+                                              └──► MotorLogico ──► TablaVerdad
+                                                                ──► ExplicacionEducativaBuilder
+```
+
+In **formula mode**, `TautoTeacherApp` normalizes the raw input string, passes it directly to `MotorLogico.tipoFormula()`, and feeds the same formula to `TablaVerdad.construir()` and `ExplicacionEducativaBuilder.construir()`.
+
+In **natural-language mode**, the input first passes through `LogicScriptService.traducir()`, which runs the full NLP pipeline inside `LogicScriptEngine`. If translation succeeds, the resulting `LogicScriptResult` provides the formula string and a proposition map (`Map<String, String>`). Both are then forwarded to the same `MotorLogico` and visualization calls used in formula mode.
+
+## Service Facade Pattern
+
+Neither the GUI nor the CLI calls the NLP or engine classes directly. Instead, both entry points go through a service layer:
+
+- **`LogicScriptService`** wraps `LogicScriptEngine` and is the sole public API for NL-to-formula translation. `TautoTeacherApp` holds a single `final` instance of it; `LogicScriptCli` instantiates one per invocation.
+- **`ServicioTautoTeacher`** (in `tautoteacher2.servicio`) is the placeholder for a higher-level facade that can orchestrate both formula and NL analysis through typed DTOs (`SolicitudAnalisis`, `ResultadoAnalisis`), intended for future extension without changing existing callers.
+
+This pattern means that the UI panels remain ignorant of how translation works — they only depend on `LogicScriptResult` and the return value of `MotorLogico.tipoFormula()`, both of which are stable value types.
+
+<Note>
+  `core.lgs` is a plain-text resource file loaded at runtime from the classpath path `logicscript/core.lgs`. It contains the connective keyword definitions, synonym dictionary entries, morphological suffix rules (`lexrule`), and semantic patterns that drive the entire NLP pipeline. Because it is a resource file rather than compiled code, you can edit its rules and reload the application — or swap in a custom `.lgs` file — without recompiling any Java source.
+</Note>

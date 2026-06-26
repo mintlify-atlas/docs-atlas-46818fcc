@@ -1,0 +1,94 @@
+---
+title: "SemanticMapper: Token Sequences to Logic IR"
+sidebarTitle: "Semantic Mapper"
+description: "SemanticMapper matches token sequences from NaturalLexer against named patterns and produces an IR expression tree representing the propositional structure of a sentence."
+---
+
+`SemanticMapper` (package `tautoteacher2.nlp.semantica`) is the final translation step of the NLP pipeline. It receives the `List<TokenNatural>` produced by `NaturalLexer`, iterates over an ordered catalogue of `PatronSemanticoLgs` patterns, and — for the first pattern whose token-type sequence exactly matches the list — constructs a `LogicExpr` IR node. The lexemas carried by the matched `LITERAL` tokens are canonicalized by `BaseConocimiento` before they become `AtomExpr` leaves, so the resulting IR always uses infinitive proposition labels regardless of how the original sentence was conjugated.
+
+## IR Expression Types
+
+The IR nodes live in package `tautoteacher2.logicscript.ir`. Every node implements `LogicExpr`, which is the root interface walked by `EmitidorFormula` to render a Unicode formula string.
+
+| IR class | Arity | Formula symbol | Description |
+|---|---|---|---|
+| `AtomExpr` | 0 (leaf) | — | A propositional variable, optionally negated (`¬`) |
+| `NegExpr` | 1 (unary) | `¬` | Logical negation of a sub-expression |
+| `AndExpr` | 2 (binary) | `∧` | Conjunction |
+| `OrExpr` | 2 (binary) | `∨` | Disjunction |
+| `ImpExpr` | 2 (binary) | `→` | Implication (antecedent → consequent) |
+| `EquivExpr` | 2 (binary) | `↔` | Biconditional equivalence |
+
+`AtomExpr` carries two fields: the canonical label string (e.g., `"llover"`) and a boolean `negada` flag set to `true` when the original literal was prefixed with `"no "`.
+
+## Built-in Patterns
+
+The default pattern catalogue is defined in `patronesPredeterminados()`. Patterns are matched in the order listed; the first matching pattern wins.
+
+| Pattern name | Token sequence | IR output | Notes |
+|---|---|---|---|
+| `SI_CONJ_Y_ENTONCES` | `SI LIT Y LIT ENTONCES LIT` | `IMP_AND` | Antecedent is conjunction of two literals |
+| `SI_ENTONCES_DISY_CONS` | `SI LIT ENTONCES LIT O LIT` | `IMP_OR` | Consequent is disjunction |
+| `SI_ENTONCES_CONJ_CONS` | `SI LIT ENTONCES LIT Y LIT` | `IMP_AND_CONS` | Consequent is conjunction |
+| `SI_DISY_O_ENTONCES` | `SI LIT O LIT ENTONCES LIT` | `IMP_OR_ANT` | Antecedent is disjunction |
+| `SI_DISY_O_ELIPTICO` | `SI LIT O LIT LIT` | `IMP_OR_ANT` | Elided `entonces`, disjunctive antecedent |
+| `SIEMPRE_QUE_CONJ_Y_ELIPTICO` | `SIEMPRE_QUE LIT Y LIT LIT` | `IMP_AND` | Elided `entonces` after `siempre que` |
+| `SIEMPRE_QUE_DISY_O_ELIPTICO` | `SIEMPRE_QUE LIT O LIT LIT` | `IMP_OR_ANT` | Elided `entonces`, disjunctive antecedent |
+| `CUANDO_CONJ_Y_ELIPTICO` | `CUANDO LIT Y LIT LIT` | `IMP_AND` | Elided `entonces` after `cuando` |
+| `CUANDO_DISY_O_ELIPTICO` | `CUANDO LIT O LIT LIT` | `IMP_OR_ANT` | Elided `entonces`, disjunctive antecedent |
+| `SI_CONJ_Y_ELIPTICO` | `SI LIT Y LIT LIT` | `IMP_AND` | Elided `entonces`, conjunctive antecedent |
+| `SI_ENTONCES` | `SI LIT ENTONCES LIT` | `IMP` | Standard conditional |
+| `SI_ELIPTICO` | `SI LIT LIT` | `IMP` | Elliptical conditional, no `entonces` |
+| `CUANDO_ENTONCES` | `CUANDO LIT ENTONCES LIT` | `IMP` | Temporal conditional with `entonces` |
+| `CUANDO_ELIPTICO` | `CUANDO LIT LIT` | `IMP` | Elliptical temporal conditional |
+| `SOLO_SI` | `LIT SOLO_SI LIT` | `IMP` | Necessary condition (`P solo si Q` → `P → Q`) |
+| `A_MENOS_QUE` | `LIT A_MENOS_QUE LIT` | `IMP_UNLESS` | Exception (`P a menos que Q` → `¬Q → P`) |
+| `SIEMPRE_QUE_ENTONCES` | `SIEMPRE_QUE LIT ENTONCES LIT` | `IMP` | Sufficient condition with `entonces` |
+| `SIEMPRE_QUE_ELIPTICO` | `SIEMPRE_QUE LIT LIT` | `IMP` | Elliptical sufficient condition |
+| `CONSECUENTE_SI_ANTECEDENTE` | `LIT SI LIT` | `IMP` (reversed) | Consequent-first word order: `Q si P` → `P → Q` |
+| `EN_CASO_DE_QUE` | `EN_CASO_DE_QUE LIT LIT` | `IMP` | Alternative conditional phrasing |
+| `EQUIVALENCIA` | `LIT SI_Y_SOLO_SI LIT` | `EQUIV` | Biconditional |
+| `CONJUNCION` | `LIT Y LIT` | `AND` | Simple conjunction |
+| `DISYUNCION` | `LIT O LIT` | `OR` | Simple disjunction |
+
+The `IMP_UNLESS` IR type does not create a plain `ImpExpr(left, right)`; instead it wraps the right-hand atom in a `NegExpr` and reverses the operand order, producing `ImpExpr(NegExpr(right), left)` — i.e., `(¬Q → P)`.
+
+## The `mapearBloque` Method
+
+```java
+// tokens produced by NaturalLexer.tokenizar(...)
+List<TokenNatural> tokens = lexer.tokenizar("si llueve entonces llevo paraguas");
+
+List<String> pasosDeAnalisis = new ArrayList<>();
+
+LogicExpr expr = semanticMapper.mapearBloque(
+    "si llueve entonces llevo paraguas",   // original block text (used only for fallback)
+    tokens,
+    pasosDeAnalisis
+);
+// expr → ImpExpr(AtomExpr("llover"), AtomExpr("llevar"))
+// pasosDeAnalisis → ["SemanticMapper: patrón SI_ENTONCES detectado."]
+```
+
+The `pasosDeAnalisis` list is a caller-supplied accumulator. After the call it contains one entry naming the matched pattern, or `"SemanticMapper: fallback a átomo simple."` when no pattern matched.
+
+## Negation Inside Literals
+
+Before constructing an `AtomExpr`, `SemanticMapper` checks whether the literal lexema starts with `"no "`. If so, the `no` prefix is stripped and `AtomExpr` is created with `negada = true`. This means a literal like `"no estudio"` produces `AtomExpr("estudiar", true)`, which `EmitidorFormula` renders as `¬estudiar`.
+
+## Fallback Behavior
+
+When no pattern in the catalogue matches the token list, `SemanticMapper` applies two sequential fallbacks:
+
+1. **First-literal fallback** — the lexema of the first `LITERAL` token found in the list is canonicalized and wrapped in an `AtomExpr`. `pasosDeAnalisis` records `"SemanticMapper: fallback a átomo simple."`.
+2. **Full-text fallback** — if there are no `LITERAL` tokens at all, the raw `textoBloque` string is used as the atom label. `pasosDeAnalisis` records `"SemanticMapper: fallback por texto completo."`.
+
+Both fallbacks produce a valid (though structurally incomplete) `LogicExpr` so the pipeline never throws on unrecognized input.
+
+## Loading Patterns from `core.lgs`
+
+`SemanticMapper` is constructed with a `BaseConocimiento` and an optional `List<PatronSemanticoLgs>` loaded from `core.lgs` by the pipeline bootstrap. If the list is `null` or empty — for example when `core.lgs` contains no `pattern` directives — the built-in defaults from `patronesPredeterminados()` are used instead. This means the system works out of the box without any configuration file.
+
+<Note>
+Pattern matching is **exact**: the number of tokens and the type of every token in the list must match the pattern's form specification precisely. A sentence that introduces a new connective phrase or a novel word order will not match any existing pattern and will fall back to atom mode. To support new sentence structures, add a `pattern` directive to `core.lgs` — no Java recompilation is needed once the `PatronSemanticoLgs` loading infrastructure is in place.
+</Note>

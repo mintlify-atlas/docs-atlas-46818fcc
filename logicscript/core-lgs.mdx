@@ -1,0 +1,165 @@
+---
+title: "core.lgs Reference: Lemmas, Lexrules, and Patterns"
+sidebarTitle: "core.lgs"
+description: "Reference for all directives in core.lgs — the LogicScript resource file that declares Spanish lemmas, morphological suffix rules, and semantic patterns."
+---
+
+`core.lgs` (located at `src/main/resources/logicscript/core.lgs`) is the central data file for TautoTeacher's NLP pipeline. It is loaded at runtime from the classpath by `LgsCargador.cargarConDiagnostico("logicscript/core.lgs")`, which means you can edit and redeploy it without recompiling any Java code. The file currently defines irregular-verb lemmas, morphological suffix rules, exclusion lists, and positional sentence patterns that cover the full range of propositional connectives taught in the course.
+
+## File header
+
+Every `.lgs` file must declare its schema version on the first non-comment, non-blank line:
+
+```text
+version 0.6
+```
+
+The parser recognizes `version` as metadata and skips it. Future schema changes will increment this number. Version mismatches are not currently enforced, but recording the version makes it easy to diagnose incompatibilities when upgrading TautoTeacher.
+
+---
+
+## `lemma` directive
+
+**Syntax:**
+
+```text
+lemma <form> -> <canonical>
+```
+
+A `lemma` entry maps one inflected or irregular surface form to its base (canonical) form. Before the pipeline assigns a proposition symbol, `BaseConocimiento.canonicalizarFragmento` looks up each word in the lemma table; if a match is found, the canonical form is used instead. This ensures that `llueve` and `llueva` both map to the same symbol `p = llover` rather than creating two separate propositions.
+
+### When to add a `lemma`
+
+| Add a `lemma` when… | Do NOT add a `lemma` when… |
+|---|---|
+| The verb has an irregular stem change in the present tense (`apruebo → aprobar`) | The verb is a regular `-ar` verb (`estudio`, `estudia`, `estudian`) — the morphological normalizer handles these |
+| The word is a fixed noun used as a proposition (`gorra → gorra`, `paraguas → paraguas`) | The infinitive is already the surface form being used |
+| The form involves a highly irregular conjugation (`voy → ir`, `tengo → tener`) | A `lexrule sufijo` rule already covers the suffix class |
+| A locution needs a single canonical label (`solea → hacer_sol`) | The form appears in a position that the `excluir` list already protects |
+
+### Real examples from `core.lgs`
+
+```text
+lemma llueve  -> llover
+lemma llevo   -> llevar
+lemma apruebo -> aprobar
+lemma salgo   -> salir
+lemma duerme  -> dormir
+```
+
+---
+
+## `lexrule` directive
+
+**Syntax variants:**
+
+```text
+lexrule excluir <word> [<word> ...]
+lexrule sufijo <suffix> infinitivo ar|er|ir
+lexrule sufijo <suffix> heuristica primera_persona
+```
+
+`lexrule` directives feed `NormalizadorMorfologico`, which is invoked by `BaseConocimiento` as a second-priority step when no `lemma` entry matches. Rules are evaluated in declaration order — the first rule whose suffix matches the end of the input word wins.
+
+### `excluir` subtype
+
+`lexrule excluir` registers a list of words that must never be treated as inflected verbs by the morphological engine. Without this protection, nouns like `paraguas` (ends in `-as`) could be incorrectly reduced to a phantom infinitive.
+
+From `core.lgs`:
+
+```text
+lexrule excluir gorra sombrero paraguas calor frio sol cielo nube nubes lluvia examen clase
+```
+
+### `sufijo ... infinitivo` subtype
+
+Strips the declared suffix from the end of a word and appends the infinitive-class termination (`ar`, `er`, or `ir`). For example, the rule `lexrule sufijo aba infinitivo ar` converts `estudiaba` → `estudi` + `ar` → `estudiar`.
+
+Three representative rules from `core.lgs`:
+
+```text
+lexrule sufijo aba  infinitivo ar
+lexrule sufijo emos infinitivo er
+lexrule sufijo imos infinitivo ir
+```
+
+### `sufijo ... heuristica primera_persona` subtype
+
+The first-person singular present tense in Spanish ends in `-o` across all three conjugation classes, so the target class cannot be determined from the suffix alone. This rule type activates a stem-analysis heuristic that inspects the root vowel pattern to decide between `-ar`, `-er`, and `-ir`.
+
+```text
+lexrule sufijo o heuristica primera_persona
+```
+
+This single rule handles regular forms like `estudio → estudiar`, `aprendo → aprender`, and `vivo → vivir` without requiring individual `lemma` entries for each verb.
+
+---
+
+## `pattern` directive
+
+**Syntax:**
+
+```text
+pattern <NAME> <token-sequence> => <ir-type> left=N right=M [mid=K]
+```
+
+A `pattern` declares a named template that `SemanticMapper` tries to match against the token list produced by `NaturalLexer`. Patterns are tested in declaration order; the first matching pattern wins. When a pattern matches, the engine builds an IR node of the specified type, using the token positions indicated by `left`, `right`, and (where required) `mid` to locate the operand literals.
+
+### Token types
+
+| Token | Matches |
+|---|---|
+| `si` | The word "si" (conditional) |
+| `entonces` | "entonces" |
+| `y` | "y" (conjunction) |
+| `o` | "o" (disjunction) |
+| `literal` | Any span of text that is not a keyword — the actual proposition text |
+| `solo_si` | The phrase "solo si" |
+| `a_menos_que` | The phrase "a menos que" |
+| `si_y_solo_si` | The phrase "si y solo si" |
+| `siempre_que` | The phrase "siempre que" |
+| `cuando` | "cuando" |
+| `en_caso_de_que` | The phrase "en caso de que" |
+
+### IR output types
+
+| IR type | Meaning | Notes |
+|---|---|---|
+| `imp` | Implication (→) | Requires `left`, `right` |
+| `and` | Conjunction (∧) | Requires `left`, `right` |
+| `or` | Disjunction (∨) | Requires `left`, `right` |
+| `equiv` | Biconditional (↔) | Requires `left`, `right` |
+| `imp_and` | `(left ∧ mid) → right` | Requires `left`, `mid`, `right` |
+| `imp_or` | `left → (mid ∨ right)` | Requires `left`, `mid`, `right` |
+| `imp_or_ant` | `(left ∨ mid) → right` | Requires `left`, `mid`, `right` |
+| `imp_and_cons` | `left → (mid ∧ right)` | Requires `left`, `mid`, `right` |
+| `imp_unless` | `¬left → right` ("unless") | Requires `left`, `right` |
+
+### `left`, `right`, `mid` index rules
+
+The indices are **zero-based** positions in the matched token sequence (including keyword tokens, not just literals). For example, in the sequence `[si, literal, entonces, literal]`, position `1` is the first literal and position `3` is the second literal.
+
+### Real examples from `core.lgs`
+
+```text
+pattern SI_ENTONCES             si literal entonces literal           => imp         left=1 right=3
+pattern CONJUNCION              literal y literal                     => and         left=0 right=2
+pattern DISYUNCION              literal o literal                     => or          left=0 right=2
+pattern EQUIVALENCIA            literal si_y_solo_si literal          => equiv       left=0 right=2
+pattern SI_CONJ_Y_ENTONCES      si literal y literal entonces literal => imp_and     left=1 mid=3 right=5
+pattern SI_ENTONCES_DISY_CONS   si literal entonces literal o literal => imp_or      left=1 mid=3 right=5
+pattern SOLO_SI                 literal solo_si literal               => imp         left=0 right=2
+pattern A_MENOS_QUE             literal a_menos_que literal           => imp_unless  left=0 right=2
+pattern CONSECUENTE_SI_ANTECEDENTE literal si literal                 => imp         left=2 right=0
+```
+
+<Warning>
+  Pattern matching is positional and exact — the number of tokens in the declared sequence must match the number of tokens produced by the lexer for that block precisely. If a sentence produces even one extra or missing token, no pattern will fire and the segment falls back to a bare atom. Always verify pattern matches by inspecting the `pasosDeAnalisis` trace or running the regression harness after adding a new pattern.
+</Warning>
+
+<Tip>
+  **Extending `core.lgs` safely:**
+  - Add `lemma` lines for any irregular verb forms that appear in your course sentences and fail to canonicalize correctly.
+  - Add `pattern` lines for new sentence structures (e.g. a new connective phrasing) that the current patterns don't cover. Give each pattern a descriptive `SCREAMING_SNAKE_CASE` name.
+  - After any edit, run the regression harness (`java -cp out tautoteacher2.logicscript.LogicScriptRegressionHarness`) to confirm that all 39 existing cases still pass. Add a new test case to the harness for every new sentence structure you introduce.
+</Tip>

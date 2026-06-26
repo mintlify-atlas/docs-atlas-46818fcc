@@ -1,0 +1,96 @@
+---
+title: "LogicScriptEngine and LogicScriptService"
+sidebarTitle: "Engine"
+description: "LogicScriptEngine orchestrates the full NLP-to-formula pipeline. LogicScriptService is the public facade used by the GUI and CLI."
+---
+
+`LogicScriptEngine` (package `tautoteacher2.logicscript`) is the central orchestrator that converts a Spanish natural-language sentence into a propositional formula string. It wires together four pipeline stages — `NormalizadorTexto`, `NaturalLexer`, `SemanticMapper`, and `EmitidorFormula` — and manages the loading of `core.lgs` so that callers never have to deal with classpath resources directly. The engine is never used directly from application code; instead, all callers go through `LogicScriptService`, the public facade that wraps a single engine instance.
+
+## `LogicScriptEngine.traducir(String textoOriginal)`
+
+The `traducir` method is the single entry point for the entire pipeline. It always returns a `LogicScriptResult` — never throws.
+
+<Steps>
+  <Step title="Load core.lgs">
+    At construction time the engine already called `LgsCargador.cargarConDiagnostico("logicscript/core.lgs")` and stored the result. At the start of `traducir`, it inspects that result. If `bloqueaTraduccion()` is `true` (parse error or unrecoverable I/O error), the method records the load error in `pasosDeAnalisis` and immediately returns `LogicScriptResult.error(...)`. If the status is `RECURSO_NO_ENCONTRADO`, it adds a warning step and continues using the Java-embedded fallback lemmas and patterns.
+  </Step>
+  <Step title="Normalize text">
+    `NormalizadorTexto.normalizar(textoOriginal)` is called to lowercase the input, strip diacritics where applicable, and produce a clean string. If the result is empty, an error result is returned. The normalized string is added to `pasosDeAnalisis`.
+  </Step>
+  <Step title="Tokenize">
+    `NaturalLexer.tokenizar(texto)` converts the normalized string into a `List<TokenNatural>`. Each token is either a keyword (`SI`, `ENTONCES`, `Y`, `O`, `SIEMPRE_QUE`, `CUANDO`, `EN_CASO_DE_QUE`, `SOLO_SI`, `SI_Y_SOLO_SI`, `A_MENOS_QUE`) or a `LITERAL` carrying the span text. The full token list is added to `pasosDeAnalisis`.
+  </Step>
+  <Step title="Segment compound sentences">
+    The normalized text is split into independent clauses on the separators `, si`, `, siempre que`, `, cuando`, and `, en caso de que`. Each segment becomes its own translation unit. If no segments are produced, an error result is returned. When more than one segment exists, a composition note is added to `pasosDeAnalisis`.
+  </Step>
+  <Step title="Translate each segment">
+    For every segment, `SemanticMapper.mapearBloque(bloque, tokensBloque, pasosDeAnalisis)` is called. The mapper tries to match the token list against the patterns declared in `core.lgs` (in declaration order, first match wins). If no pattern matches, the segment falls back to a bare atom via `BaseConocimiento.canonicalizarFragmento`. A `null` result from the mapper causes the whole translation to fail.
+  </Step>
+  <Step title="Join segments with conjunction">
+    If there are multiple translated segments, they are combined left-to-right using `AndExpr` nodes so the result is a single `LogicExpr` tree representing `(seg1 ∧ seg2 ∧ …)`.
+  </Step>
+  <Step title="Emit formula string">
+    `EmitidorFormula.emitir(expresionFinal, registro, pasosDeAnalisis)` walks the `LogicExpr` tree, assigns short proposition symbols (`p`, `q`, `r`, …) via `RegistroProposiciones`, and serializes the result using Unicode operators (`→`, `∧`, `∨`, `↔`, `¬`).
+  </Step>
+  <Step title="Return result">
+    `LogicScriptResult.exito(formula, mensaje, pasosDeAnalisis, registro.mapaParaResultado())` is returned with the formula string, a success message, the full analysis trace, and the proposition map.
+  </Step>
+</Steps>
+
+## `LogicScriptResult` fields
+
+<ParamField path="exito" type="boolean">
+  Whether the translation pipeline completed successfully. Check this before reading `formula`.
+</ParamField>
+
+<ParamField path="formula" type="String">
+  The emitted propositional formula using Unicode symbols (e.g. `(llover → llevar)`). Empty string when `exito` is `false`.
+</ParamField>
+
+<ParamField path="mensaje" type="String">
+  A human-readable status message — `"Traducción LogicScript completada."` on success, or a description of the error on failure.
+</ParamField>
+
+<ParamField path="pasosDeAnalisis" type="List<String>">
+  An unmodifiable ordered list of trace entries recorded at each pipeline stage: the normalized input, the raw token list, the block being processed, matched pattern names, fallback decisions, and any load warnings. Very useful for debugging.
+</ParamField>
+
+<ParamField path="proposiciones" type="Map<String, String>">
+  An unmodifiable map from short symbol to canonical fragment, e.g. `{p=llover, q=llevar}`. Empty when `exito` is `false`.
+</ParamField>
+
+## `LogicScriptService`
+
+`LogicScriptService` is a thin, stateless-from-the-caller's-perspective facade that creates one `LogicScriptEngine` instance at construction time and exposes a single method:
+
+```java
+public LogicScriptResult traducir(String textoNatural)
+```
+
+Both the GUI (`MainWindow`) and the CLI (`LogicScriptCli`) instantiate `LogicScriptService` and call `traducir`. This ensures that the same pipeline — including the same loaded `core.lgs` data — is used in every context.
+
+### Java usage example
+
+```java
+LogicScriptService service = new LogicScriptService();
+LogicScriptResult result = service.traducir("si llueve entonces llevo paraguas");
+if (result.isExito()) {
+    System.out.println(result.getFormula());       // (llover → llevar)
+    System.out.println(result.getProposiciones()); // {p=llover, q=llevar}
+}
+```
+
+## `EstadoCargaLgs` enum values
+
+`EstadoCargaLgs` is returned inside `ResultadoCargaLgs` by `LgsCargador.cargarConDiagnostico`. The engine inspects it at startup to decide how to proceed.
+
+| Value | Meaning | Engine behaviour |
+|---|---|---|
+| `EXITO` | File read and parsed without errors. | All declarative rules are active. |
+| `RECURSO_NO_ENCONTRADO` | The `.lgs` path is not on the classpath. | Warning logged in `pasosDeAnalisis`; Java-embedded lemmas and patterns used as fallback. Translation proceeds. |
+| `ERROR_SINTAXIS` | A line in the file could not be parsed (message includes line number). | `bloqueaTraduccion()` returns `true`; translation is blocked and an error result is returned immediately. |
+| `ERROR_LECTURA` | An I/O failure unrelated to parsing occurred. | Same blocking behaviour as `ERROR_SINTAXIS`. |
+
+<Note>
+  The `pasosDeAnalisis` list is your first debugging tool. It captures every decision the pipeline makes — which pattern was matched, when a fallback atom was used, whether the `.lgs` file was found — so you can trace exactly why a sentence produced an unexpected formula. Print it to the console or display it in the GUI's detail panel whenever a translation looks wrong.
+</Note>

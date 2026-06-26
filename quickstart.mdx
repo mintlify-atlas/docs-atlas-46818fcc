@@ -1,47 +1,140 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with TautoTeacher 2.0"
+sidebarTitle: "Quickstart"
+description: "Compile and run TautoTeacher 2.0 on Windows using the provided PowerShell script, then evaluate your first propositional formula and natural-language sentence."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+Before you begin, make sure you have **JDK 17 or later** installed on your machine and that you have access to the TautoTeacher 2.0 project source code. The build system is a single PowerShell script — no Maven, Gradle, or external dependencies are required. All source files live under `src/main/java` and compile directly to a flat `out/` directory.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+
+  <Step title="Clone the repository">
+    Download the project source from GitHub:
 
     ```bash
-    npm install your-package
+    git clone https://github.com/AngelMoralesChazari/TautoTeacher-2.0
+    cd TautoTeacher-2.0
     ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+    The repository contains the full Java source tree under `src/main/java/tautoteacher2/`, the `core.lgs` resource file under `src/main/resources/logicscript/`, and the `compile.ps1` build script at the project root.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
+  <Step title="Compile">
+    Run the PowerShell build script from the project root. Pass the path to your JDK installation with `-JdkHome`, or omit it if `JAVA_HOME` is already set in your environment:
+
+    ```powershell
+    # Using an explicit JDK path
+    .\compile.ps1 -JdkHome "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
+
+    # Or, if JAVA_HOME is set
+    .\compile.ps1
+    ```
+
+    The script performs three actions:
+
+    1. Discovers every `.java` file under `src\main\java` recursively.
+    2. Compiles them all with `javac --release 17 -encoding UTF-8` into the `out\` directory.
+    3. Copies everything under `src\main\resources` into `out\` so that `core.lgs` and the app icon are available on the classpath at runtime.
+
+    A successful run prints:
+
+    ```text
+    Recursos copiados a out\
+    OK: compilado con --release 17 en <project-root>\out
     ```
   </Step>
+
+  <Step title="Run the GUI">
+    Launch the Swing desktop application:
+
+    ```powershell
+    java -cp out tautoteacher2.Main
+    ```
+
+    A window titled **TautoTeacher 2.0** opens. The interface provides two input modes, selectable via a toggle at the top of the input panel:
+
+    - **Formula mode** — enter a propositional formula directly using logic symbols.
+    - **Natural language mode** — type a sentence in Spanish and let the NLP pipeline translate it.
+
+    Click **Procesar** (or press Enter) after entering your input to see the classification, truth table, and educational explanation panels update.
+  </Step>
+
+  <Step title="Try the CLI">
+    The `LogicScriptCli` entry point lets you test the NLP-to-formula pipeline from the terminal without opening the GUI:
+
+    ```powershell
+    java -cp out tautoteacher2.logicscript.LogicScriptCli "si llueve entonces llevo paraguas"
+    ```
+
+    Expected output:
+
+    ```text
+    === LogicScript (demo consola) ===
+    Entrada: si llueve entonces llevo paraguas
+
+    Estado: OK
+    Fórmula: (p → q)
+    Proposiciones: {llueve=p, llevo paraguas=q}
+    Pasos de análisis:
+      - [NormalizadorTexto] ...
+      - [NaturalLexer] ...
+      - [SemanticMapper] patrón: si_entonces
+      - [EmitidorFormula] ImpExpr(p, q)
+
+    Motor lógico:
+      Tautología: false
+      Clasificación: CONTINGENCIA
+    ```
+
+    The CLI prints the translated formula, the propositional variable mapping, the analysis steps produced by each pipeline stage, and the final tautology/classification result from `MotorLogico`.
+  </Step>
+
+  <Step title="Run regression tests">
+    Verify the NLP pipeline against the full test suite:
+
+    ```powershell
+    java -cp out tautoteacher2.logicscript.LogicScriptRegressionHarness
+    ```
+
+    The harness runs **39 test cases** in total: 37 natural-language sentences covering implication, conjunction, disjunction, equivalence, negation, elliptical forms, morphological variants, multi-clause compositions, and edge cases (empty input, whitespace-only), plus two `.lgs` loader diagnostic checks. A clean run prints:
+
+    ```text
+    LogicScriptRegressionHarness: OK (39 casos LN + diagnóstico .lgs).
+    ```
+
+    If any case fails, the harness prints a `FALLO` line per failure with the input, the expected formula, and the formula actually produced, then exits with a non-zero status code.
+  </Step>
+
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Your first formula
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+Once the GUI is running, switch to **Formula mode** and try a simple implication:
+
+```text
+p→q
+```
+
+TautoTeacher evaluates all four truth-value combinations for `p` and `q` and classifies the formula as a **contingency** — it is true when `p` is false or when both are true, but false when `p` is true and `q` is false.
+
+To see a tautology, enter the hypothetical syllogism:
+
+```text
+(p→q)∧(q→r)→(p→r)
+```
+
+The truth table will show `V` (true) in every row, and the classification panel will display **TAUTOLOGÍA** in green. The educational explanation panel shows the refutation-style proof, walking through why assuming the consequent false leads to a contradiction in the antecedent.
+
+<Tip>
+  You do not need to copy-paste Unicode symbols. The formula input field normalizes common ASCII keyboard shortcuts automatically before evaluation:
+
+  | Type      | Becomes |
+  |-----------|---------|
+  | `->`      | `→`     |
+  | `&&`      | `∧`     |
+  | `\|\|`    | `∨`     |
+  | `!` or `~`| `¬`     |
+  | `<->`     | `↔`     |
+
+  So you can type `(p->q)&&(q->r)->p->r` directly on any standard keyboard and the app will handle the conversion.
 </Tip>
