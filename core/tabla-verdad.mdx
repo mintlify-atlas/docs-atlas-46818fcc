@@ -1,5 +1,5 @@
 ---
-title: "Truth Table Generation in TautoTeacher 2.0"
+title: "Truth Table Generation in TautoTeacher 2.0 (TablaVerdad)"
 sidebarTitle: "Truth Tables"
 description: "TablaVerdad builds structured truth table data for propositional formulas with up to four variables, used by the visualization panel."
 ---
@@ -69,9 +69,9 @@ The loop above prints four lines for the formula `p∧q`:
 | p | q | p∧q |
 |---|---|-----|
 | F | F | F |
-| T | F | F |
-| F | T | F |
-| T | T | T |
+| V | F | F |
+| F | V | F |
+| V | V | V |
 
 <Note>
   Variable ordering is determined by `TreeSet` (natural alphabetical ordering), so variables always appear left to right as `p`, `q`, `r`, `s` — regardless of the order they appear in the formula string. This guarantees a consistent column layout across the truth table and evaluation tree panels.

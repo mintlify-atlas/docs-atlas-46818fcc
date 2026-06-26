@@ -1,7 +1,7 @@
 ---
-title: "Get Started with TautoTeacher 2.0"
+title: "TautoTeacher 2.0 Quickstart: Build and Run in Minutes"
 sidebarTitle: "Quickstart"
-description: "Compile and run TautoTeacher 2.0 on Windows using the provided PowerShell script, then evaluate your first propositional formula and natural-language sentence."
+description: "Compile TautoTeacher 2.0 with the PowerShell script, then evaluate your first propositional formula or Spanish sentence from the CLI or GUI."
 ---
 
 Before you begin, make sure you have **JDK 17 or later** installed on your machine and that you have access to the TautoTeacher 2.0 project source code. The build system is a single PowerShell script — no Maven, Gradle, or external dependencies are required. All source files live under `src/main/java` and compile directly to a flat `out/` directory.
@@ -96,10 +96,10 @@ Before you begin, make sure you have **JDK 17 or later** installed on your machi
     java -cp out tautoteacher2.logicscript.LogicScriptRegressionHarness
     ```
 
-    The harness runs **39 test cases** in total: 37 natural-language sentences covering implication, conjunction, disjunction, equivalence, negation, elliptical forms, morphological variants, multi-clause compositions, and edge cases (empty input, whitespace-only), plus two `.lgs` loader diagnostic checks. A clean run prints:
+    The harness runs **40 test cases** in total: 38 natural-language sentences covering implication, conjunction, disjunction, equivalence, negation, elliptical forms, morphological variants, multi-clause compositions, and edge cases (empty input, whitespace-only), plus two `.lgs` loader diagnostic checks. A clean run prints:
 
     ```text
-    LogicScriptRegressionHarness: OK (39 casos LN + diagnóstico .lgs).
+    LogicScriptRegressionHarness: OK (40 casos LN + diagnóstico .lgs).
     ```
 
     If any case fails, the harness prints a `FALLO` line per failure with the input, the expected formula, and the formula actually produced, then exits with a non-zero status code.
@@ -128,13 +128,14 @@ The truth table will show `V` (true) in every row, and the classification panel 
 <Tip>
   You do not need to copy-paste Unicode symbols. The formula input field normalizes common ASCII keyboard shortcuts automatically before evaluation:
 
-  | Type      | Becomes |
-  |-----------|---------|
-  | `->`      | `→`     |
-  | `&&`      | `∧`     |
-  | `\|\|`    | `∨`     |
-  | `!` or `~`| `¬`     |
-  | `<->`     | `↔`     |
+  | Type           | Becomes |
+  |----------------|---------|
+  | `->`           | `→`     |
+  | `&&`           | `∧`     |
+  | `^`            | `∧`     |
+  | `\|\|`         | `∨`     |
+  | `!` or `~`     | `¬`     |
+  | `<->` or `<=>` | `↔`     |
 
   So you can type `(p->q)&&(q->r)->p->r` directly on any standard keyboard and the app will handle the conversion.
 </Tip>

@@ -1,14 +1,14 @@
 ---
-title: "Morphological Normalizer for Spanish Verbs"
+title: "Morphological Normalizer: Spanish Verb Canonicalization"
 sidebarTitle: "Morphological Normalizer"
-description: "NormalizadorMorfologico reduces conjugated Spanish verb forms to their infinitives using suffix rules and irregular lemma tables, unifying proposition labels."
+description: "NormalizadorMorfologico maps conjugated Spanish verb forms to their infinitives via suffix rules and lemma tables, unifying proposition labels in the IR."
 ---
 
-Spanish morphological inflection is a direct challenge for proposition labeling: `llueve`, `llueva`, and `llovió` are all conjugations of the same verb *llover*, yet a naïve pipeline would assign each form its own distinct proposition symbol. `NormalizadorMorfologico` (package `tautoteacher2.nlp.lexicon`) solves this by mapping every conjugated form back to its infinitive before a symbol is assigned, so that all three forms produce the same label `llover` and therefore the same `AtomExpr` node in the IR.
+Spanish morphological inflection is a direct challenge for proposition labeling: `llueve`, `llueva`, and `llovió` are all conjugations of the same verb *llover*, yet a naïve pipeline would assign each form its own distinct proposition symbol. `NormalizadorMorfologico` (package `tautoteacher2.nlp.lexicon`), working together with `BaseConocimiento`, handles this by mapping every conjugated form back to its infinitive before a symbol is assigned, so that all three forms produce the same label `llover` and therefore the same `AtomExpr` node in the IR. The irregular stems (`llueve`, `llovió`) are resolved through explicit lemma entries in `core.lgs`; regular conjugations (e.g., `estudio`, `estudian`) are handled by `NormalizadorMorfologico`'s suffix rules.
 
-## Two-Layer Approach
+## Three-Layer Approach
 
-Canonicalization of a single word goes through two ordered layers before falling back to the identity.
+Canonicalization of a single word goes through three ordered steps inside `BaseConocimiento.canonicalizarPalabra()`.
 
 **Layer 1 — Lemma table (highest priority).** The `BaseConocimiento` class loads explicit `lemma` entries from `core.lgs` at startup. These cover irregular verbs and special cases where heuristic suffix rules would produce the wrong result: for example `llueve → llover` (the stem changes from *lluev-* to *llov-*), `apruebo → aprobar`, and `solea → hacer_sol` (a locution). Lemma lookup is an exact `HashMap` get — O(1) and unambiguous.
 
@@ -79,7 +79,7 @@ NormalizadorMorfologico nm = new NormalizadorMorfologico();
 
 nm.normalizar("estudio");   // → "estudiar"   (suffix -o heuristic, stem ends in vowel)
 nm.normalizar("estudian");  // → "estudiar"   (suffix -an)
-nm.normalizar("duerme");    // → "dormir"     (via lemma in BaseConocimiento)
+nm.normalizar("duerme");    // → "duerme"     (no matching suffix rule; identity fallback)
 nm.normalizar("gorra");     // → "gorra"      (excluded from verb processing)
 nm.normalizar("estudiar");  // → "estudiar"   (already an infinitive, returned as-is)
 ```

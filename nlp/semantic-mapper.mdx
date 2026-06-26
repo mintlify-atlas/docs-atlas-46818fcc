@@ -1,7 +1,7 @@
 ---
-title: "SemanticMapper: Token Sequences to Logic IR"
+title: "SemanticMapper: NLP Token Sequences to Logic IR Nodes"
 sidebarTitle: "Semantic Mapper"
-description: "SemanticMapper matches token sequences from NaturalLexer against named patterns and produces an IR expression tree representing the propositional structure of a sentence."
+description: "SemanticMapper matches NaturalLexer token sequences against named patterns and builds an IR expression tree for the propositional structure of a sentence."
 ---
 
 `SemanticMapper` (package `tautoteacher2.nlp.semantica`) is the final translation step of the NLP pipeline. It receives the `List<TokenNatural>` produced by `NaturalLexer`, iterates over an ordered catalogue of `PatronSemanticoLgs` patterns, and — for the first pattern whose token-type sequence exactly matches the list — constructs a `LogicExpr` IR node. The lexemas carried by the matched `LITERAL` tokens are canonicalized by `BaseConocimiento` before they become `AtomExpr` leaves, so the resulting IR always uses infinitive proposition labels regardless of how the original sentence was conjugated.
@@ -66,7 +66,7 @@ LogicExpr expr = semanticMapper.mapearBloque(
     tokens,
     pasosDeAnalisis
 );
-// expr → ImpExpr(AtomExpr("llover"), AtomExpr("llevar"))
+// expr → ImpExpr(AtomExpr("llover"), AtomExpr("llevar paraguas"))
 // pasosDeAnalisis → ["SemanticMapper: patrón SI_ENTONCES detectado."]
 ```
 

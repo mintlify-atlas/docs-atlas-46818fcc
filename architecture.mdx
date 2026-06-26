@@ -1,5 +1,5 @@
 ---
-title: "TautoTeacher 2.0 Architecture and Module Overview"
+title: "TautoTeacher 2.0: Architecture and Module Overview"
 sidebarTitle: "Architecture"
 description: "Understand how TautoTeacher 2.0 separates concerns into four layers: logic engine, NLP pipeline, LogicScript DSL, and the Swing user interface."
 ---
@@ -45,7 +45,7 @@ TautoTeacher 2.0 is structured around four independent layers, each housed in it
     - **`LogicScriptEngine`** — orchestrates the full translation pipeline for a single natural-language input string.
     - **`LogicScriptService`** — a thin facade that the UI and CLI both call; its `traducir(String)` method is the single public entry point.
     - **`LogicScriptCli`** — standalone `main` class for command-line use; prints the formula, proposition map, analysis steps, and `MotorLogico` classification.
-    - **`LogicScriptRegressionHarness`** — self-contained test runner with 39 cases; exits non-zero on any failure.
+    - **`LogicScriptRegressionHarness`** — self-contained test runner with 40 cases; exits non-zero on any failure.
     - **IR expressions** (`tautoteacher2.logicscript.ir`) — `LogicExpr` interface implemented by `AtomExpr`, `NegExpr`, `AndExpr`, `OrExpr`, `ImpExpr`, and `EquivExpr`; `EmitidorFormula` walks the IR tree to emit the Unicode formula string.
     - **`RegistroProposiciones`** — assigns and tracks single-letter variable names (`p`, `q`, `r`, …) for atomic proposition spans during a single translation run.
   </Card>
@@ -93,7 +93,7 @@ In **natural-language mode**, the input first passes through `LogicScriptService
 Neither the GUI nor the CLI calls the NLP or engine classes directly. Instead, both entry points go through a service layer:
 
 - **`LogicScriptService`** wraps `LogicScriptEngine` and is the sole public API for NL-to-formula translation. `TautoTeacherApp` holds a single `final` instance of it; `LogicScriptCli` instantiates one per invocation.
-- **`ServicioTautoTeacher`** (in `tautoteacher2.servicio`) is the placeholder for a higher-level facade that can orchestrate both formula and NL analysis through typed DTOs (`SolicitudAnalisis`, `ResultadoAnalisis`), intended for future extension without changing existing callers.
+- **`ServicioTautoTeacher`** (in `tautoteacher2.servicio`) is a stub class with an empty body. The package also contains typed DTOs (`SolicitudAnalisis`, `ResultadoAnalisis`) that reserve structure for a future higher-level facade, but no orchestration logic is implemented yet.
 
 This pattern means that the UI panels remain ignorant of how translation works — they only depend on `LogicScriptResult` and the return value of `MotorLogico.tipoFormula()`, both of which are stable value types.
 

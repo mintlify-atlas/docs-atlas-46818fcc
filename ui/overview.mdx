@@ -1,7 +1,7 @@
 ---
-title: "TautoTeacher 2.0 GUI: Swing Desktop Application"
+title: "TautoTeacher 2.0 Swing GUI: Desktop Application Overview"
 sidebarTitle: "UI Overview"
-description: "TautoTeacher 2.0's Swing-based GUI provides two input modes, a result panel with color-coded verdicts, a truth table display, and an educational explanation area."
+description: "TautoTeacher 2.0 Swing GUI: color-coded verdicts, a truth table and evaluation tree, and a scrollable educational explanation panel."
 ---
 
 TautoTeacher 2.0 ships with a Java Swing desktop GUI launched by `tautoteacher2.Main`. After printing a startup message to the console, `Main` instantiates `TautoTeacherApp` and calls `app.iniciar()`, which constructs `VentanaPrincipal` — a maximized `JFrame` titled **"TautoTeacher - Logica Proposicional"** — and wires its three inner panels together. The window is organized into three functional areas: an input panel, a result panel, and a visualization panel, all managed by the `TautoTeacherApp` controller.
@@ -26,7 +26,7 @@ The three main panels are:
 
 ## Color coding
 
-`TautoTeacherApp` maps each classification to a distinct color used in both `PanelResultadoLogico` and the icon label inside `setDictamen`:
+`TautoTeacherApp` maps each classification to a distinct color used in `PanelResultadoLogico`:
 
 | Classification | Color | Hex |
 |---|---|---|
@@ -34,7 +34,7 @@ The three main panels are:
 | CONTRADICCIÓN | Red | `#dc3545` |
 | CONTINGENCIA | Dark text | `#212529` |
 
-`PanelResultadoLogico.setDictamen` mirrors this palette for its icon label: ✔ in green for tautologies, ✘ in red for contradictions, and ○ in amber (`#c87800`) for contingencies.
+`PanelResultadoLogico.setDictamen` mirrors this palette for its icon label: ✔ in green (`#28a745`) for tautologies, ✘ in red (`#dc3545`) for contradictions, and ○ in amber (`#c87800`) for contingencies.
 
 ## `TautoTeacherApp` controller
 
@@ -85,7 +85,7 @@ ventana.setContenidoEducativo(
         seccionTecnica,   // formatted header text (formula / NL source, classification)
         formula,          // the evaluated propositional formula
         tipo,             // "TAUTOLOGÍA" | "CONTRADICCIÓN" | "CONTINGENCIA"
-        proposiciones     // symbol-to-lemma map from LogicScript, or Map.of() for direct formulas
+        proposiciones     // lemma-to-symbol map from LogicScript, or Map.of() for direct formulas
     )
 );
 ```
@@ -97,5 +97,5 @@ ventana.setContenidoEducativo(
 3. **Educational demonstration** — for tautologies and contingencies, `MotorLogico.generarExplicacionEducativa` produces a structured proof outline; for contradictions, a fixed explanation is appended.
 
 <Note>
-  `VentanaPrincipal.setContenidoEducativo(String text)` and `limpiarContenidoEducativo()` control the scrollable `JTextArea` inside the **Explicación** section on the right side of the window. `setContenidoEducativo` replaces the text and resets the scroll position to the top; `limpiarContenidoEducativo` restores the placeholder message and also calls `panelVisualizacion.limpiar()` to reset the table and tree views simultaneously.
+  `VentanaPrincipal.setContenidoEducativo(String text)` and `limpiarContenidoEducativo()` control the scrollable `JTextArea` inside the **Explicación** section of the `CardLayout` center area. `setContenidoEducativo` replaces the text and resets the scroll position to the top; `limpiarContenidoEducativo` restores the placeholder message and also calls `panelVisualizacion.limpiar()` to reset the table and tree views simultaneously.
 </Note>

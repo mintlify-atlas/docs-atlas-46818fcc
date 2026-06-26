@@ -1,7 +1,7 @@
 ---
-title: "NaturalLexer: Tokenizing Spanish Logic Sentences"
+title: "NaturalLexer: Tokenizing Spanish Natural Language Text"
 sidebarTitle: "Natural Lexer"
-description: "NaturalLexer scans normalized Spanish text and emits a sequence of typed tokens — keywords like SI, ENTONCES, Y, and LITERAL fragments — for semantic pattern matching."
+description: "NaturalLexer scans normalized Spanish text and emits typed tokens — SI, ENTONCES, Y, O, and LITERAL fragments — for semantic pattern matching."
 ---
 
 `NaturalLexer` (package `tautoteacher2.nlp.lexer`) converts a normalized Spanish string into an ordered list of `TokenNatural` objects. It works as a single-pass, left-to-right scanner: at every position it first tries to match one of the known keyword patterns; only when no keyword matches does it advance character by character to accumulate a `LITERAL` fragment. The keyword list is sorted longest-first so that multi-word connectives like `"si y solo si "` are always recognized before their shorter prefixes like `"si "`.

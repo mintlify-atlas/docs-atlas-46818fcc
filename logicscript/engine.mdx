@@ -1,7 +1,7 @@
 ---
-title: "LogicScriptEngine and LogicScriptService"
+title: "LogicScriptEngine and LogicScriptService API Reference"
 sidebarTitle: "Engine"
-description: "LogicScriptEngine orchestrates the full NLP-to-formula pipeline. LogicScriptService is the public facade used by the GUI and CLI."
+description: "LogicScriptEngine orchestrates the full NLP-to-formula pipeline. LogicScriptService is the thin public facade used by the GUI and CLI."
 ---
 
 `LogicScriptEngine` (package `tautoteacher2.logicscript`) is the central orchestrator that converts a Spanish natural-language sentence into a propositional formula string. It wires together four pipeline stages — `NormalizadorTexto`, `NaturalLexer`, `SemanticMapper`, and `EmitidorFormula` — and manages the loading of `core.lgs` so that callers never have to deal with classpath resources directly. The engine is never used directly from application code; instead, all callers go through `LogicScriptService`, the public facade that wraps a single engine instance.

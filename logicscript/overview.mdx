@@ -1,7 +1,7 @@
 ---
 title: "LogicScript DSL: Extending TautoTeacher's Language Rules"
 sidebarTitle: "LogicScript"
-description: "LogicScript is TautoTeacher 2.0's declarative DSL for adding Spanish lemmas, morphological rules, and semantic patterns to the NLP pipeline without recompiling Java."
+description: "LogicScript is TautoTeacher 2.0's declarative DSL for adding lemmas, morphological rules, and sentence patterns to the NLP pipeline without touching Java."
 ---
 
 LogicScript is a small declarative language built into TautoTeacher 2.0 that controls how the application maps Spanish natural-language sentences to propositional logic formulas. Rules are written in plain `.lgs` text files and loaded at runtime from the classpath, so you can update vocabulary, morphology, and sentence patterns without touching or recompiling any Java source code. The central file shipped with TautoTeacher is `src/main/resources/logicscript/core.lgs`, currently at schema version `0.6`.
@@ -87,6 +87,6 @@ When building manually (without the provided `compile.ps1` script), copy `src/ma
     Translate and evaluate sentences from the command line with `LogicScriptCli`.
   </Card>
   <Card title="Regression Tests" icon="vial" href="/logicscript/regression">
-    Run the 39-case regression harness to guard against pipeline regressions.
+    Run the 40-case regression harness to guard against pipeline regressions.
   </Card>
 </CardGroup>

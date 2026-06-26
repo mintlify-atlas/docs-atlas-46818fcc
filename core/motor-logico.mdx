@@ -1,5 +1,5 @@
 ---
-title: "MotorLogico: Propositional Formula Evaluator"
+title: "MotorLogico: Propositional Logic Formula Evaluator"
 sidebarTitle: "MotorLogico"
 description: "MotorLogico evaluates propositional logic formulas by brute-force truth assignment, classifying them as tautologies, contradictions, or contingencies."
 ---
@@ -76,5 +76,5 @@ Before any evaluation takes place, every public method calls the private `valida
 2. **Allowed character set** — the entire formula must match the regular expression `^[a-zA-Z∧∨¬→↔()\s]+$`. Any character outside this set causes an `IllegalArgumentException` with the message `"Caracteres no válidos en la expresión"`.
 
 <Warning>
-  Formulas with more than 4 variables are still fully evaluated by `esTautologia` and `tipoFormula` — the 2ⁿ loop scales to any number of variables, though performance degrades exponentially. However, `generarTablaVerdad` enforces a hard cap: when more than 4 variables are detected it immediately returns the message `"(No se muestra: la fórmula tiene más de 4 variables.)"` without computing any rows.
+  Formulas with more than 4 variables are still fully evaluated by `esTautologia` and `tipoFormula` — the 2ⁿ loop scales to any number of variables, though performance degrades exponentially. However, `generarTablaVerdad` enforces a hard cap: when more than 4 variables are detected it immediately returns the string `"TABLA DE VERDAD\n─────────────\n\n(No se muestra: la fórmula tiene más de 4 variables.)\n"` without computing any rows.
 </Warning>

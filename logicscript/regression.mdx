@@ -1,7 +1,7 @@
 ---
-title: "LogicScript Regression Harness"
+title: "LogicScript Regression Harness: Pipeline Test Suite"
 sidebarTitle: "Regression Tests"
-description: "LogicScriptRegressionHarness runs 39 natural-language test cases through the full pipeline and verifies that every formula output matches its expected value exactly."
+description: "LogicScriptRegressionHarness runs 40 Spanish NL test cases through the full pipeline and verifies every formula output matches its expected value exactly."
 ---
 
 The LogicScript pipeline is unusual in that its behaviour is determined jointly by **data** (`core.lgs`) and **code** (`NaturalLexer`, `SemanticMapper`, `EmitidorFormula`). A single edit to any of those layers — even adding one `lemma` line — can silently break a sentence that previously translated correctly. `LogicScriptRegressionHarness` guards against that by recording the expected formula for every sentence the pipeline should handle, then asserting that the live pipeline still produces exactly those formulas after any change. Running the harness takes only a few seconds and requires no external test framework.
@@ -17,7 +17,7 @@ java -cp out tautoteacher2.logicscript.LogicScriptRegressionHarness
 **Success** — all cases pass:
 
 ```text
-LogicScriptRegressionHarness: OK (39 casos LN + diagnóstico .lgs).
+LogicScriptRegressionHarness: OK (40 casos LN + diagnóstico .lgs).
 ```
 
 Exit code: `0`.
@@ -126,7 +126,7 @@ Run the harness after any of the following changes:
 - Modifying `NormalizadorMorfologico` or `BaseConocimiento` (canonicalization)
 
 <Tip>
-  When adding support for a new sentence structure, follow the test-first workflow: add the failing test case to the harness first (with the exact expected formula), then update `core.lgs` or Java code until the harness goes green. This guarantees you know precisely what the output should look like before you start implementing and prevents accidental regressions during development.
+  When adding support for a new sentence structure, follow the test-first workflow: add the failing test case to the harness first (with the exact expected formula), then update `core.lgs` or Java code until the harness goes green. This guarantees you know precisely what the output should look like before you start implementing and prevents accidental regressions during development. Confirm all 40 existing cases still pass before merging.
 </Tip>
 
 <Warning>

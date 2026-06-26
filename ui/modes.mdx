@@ -1,7 +1,7 @@
 ---
-title: "Formula Mode and Natural Language Mode"
+title: "TautoTeacher 2.0: Formula Mode and Natural Language Mode"
 sidebarTitle: "Input Modes"
-description: "TautoTeacher 2.0 supports two input modes: direct propositional formula entry and Spanish natural-language sentences translated via the LogicScript pipeline."
+description: "TautoTeacher 2.0 supports direct propositional formula entry and Spanish natural-language mode translated to logic via LogicScript."
 ---
 
 `PanelEntradaNatural` exposes two input modes selectable via a `JTabbedPane` in the GUI: **Fórmula lógica** (tab index 0) and **Lenguaje natural** (tab index 1). `TautoTeacherApp` reads `panelEntrada.getModoEntrada()` when the **✔ Verificar Tautología** button is pressed and routes processing to one of two completely different code paths — direct formula evaluation or the full LogicScript NLP pipeline. Each mode produces the same end result (a classified verdict, a truth table, and an educational explanation), but the journey from input to formula differs significantly.
@@ -20,8 +20,8 @@ description: "TautoTeacher 2.0 supports two input modes: direct propositional fo
     | `<=>` | ↔ |
     | `->` | → |
     | `&&` | ∧ |
-    | `^` | ∧ |
     | `\|\|` | ∨ |
+    | `^` | ∧ |
     | `~` | ¬ |
     | `!` | ¬ |
 
@@ -90,6 +90,9 @@ When Natural Language Mode produces a successful translation, `TautoTeacherApp` 
 
 ```java
 private static String formatearMapaProposiciones(Map<String, String> proposiciones) {
+    if (proposiciones == null || proposiciones.isEmpty()) {
+        return "Proposiciones: (ninguna asignada)\n\n";
+    }
     StringBuilder sb = new StringBuilder("Proposiciones:\n");
     for (Map.Entry<String, String> e : proposiciones.entrySet()) {
         sb.append("  ").append(e.getValue()).append(" = ").append(e.getKey()).append("\n");
@@ -102,8 +105,8 @@ This produces output such as:
 
 ```text
 Proposiciones:
-  llover = p
-  llevar_paraguas = q
+  p = llover
+  q = llevar_paraguas
 ```
 
 The mapping helps students bridge the gap between the abstract formula (`p→q`) and the original natural-language sentence, making it clear exactly which real-world proposition each symbol represents. The same map is also passed to `PanelVisualizacion`, where it is used to annotate table column headers and the interpretation dropdown with the corresponding lemmas.

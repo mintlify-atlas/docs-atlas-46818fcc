@@ -1,7 +1,7 @@
 ---
-title: "Evaluation Tree Visualization"
+title: "Evaluation Tree Visualization – TautoTeacher 2.0"
 sidebarTitle: "Evaluation Tree"
-description: "ConstructorArbolEvaluacion builds step-by-step expression trees from propositional formulas, showing how each sub-expression contributes to the final result."
+description: "ConstructorArbolEvaluacion builds expression trees from propositional formulas, showing how each sub-expression contributes to the final result."
 ---
 
 TautoTeacher 2.0 builds a full evaluation tree for every truth assignment a student selects in the truth table panel, letting them see exactly *why* a formula evaluates to `true` or `false` for a given row — not just the final answer. The tree decomposes the formula recursively by operator precedence, labelling each internal node with its logical operator and its computed value, and each leaf node with the assigned boolean value of the variable. This visual walkthrough is one of the core pedagogical features that distinguishes TautoTeacher from a plain formula checker.
@@ -50,13 +50,13 @@ For the formula `p→q` with the assignment `p = true, q = false`, the tree look
 ───────────────────
 
 F : →
-    ├── V : p
-    └── F : q
+    ├── V : V
+    └── F : F
 
 Resultado raíz: F
 ```
 
-The root node carries the operator `→` and the value `false`, because `true → false` is `false`. Its two children are the leaf nodes for `p` (value `true`) and `q` (value `false`).
+The root node carries the operator `→` and the value `false`, because `true → false` is `false`. Its two children are the leaf nodes for `p` (etiqueta `"V"`, value `true`) and `q` (etiqueta `"F"`, value `false`). Because variables are substituted to the literals `true`/`false` before the tree is built, leaf etiquetas are always `"V"` or `"F"`, not the original variable names.
 
 ## Code example
 

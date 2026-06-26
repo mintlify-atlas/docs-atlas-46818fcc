@@ -12,7 +12,7 @@ The original **TautoTeacher 1.0** was a single-file Java/Swing application. Whil
 
 **TautoTeacher 2.0** is a ground-up refactoring that separates the application into four clearly bounded layers:
 
-- **Core Logic Engine** — formula parsing, tautology checking, truth table generation, evaluation tree construction, and educational explanation building, all in `tautoteacher2.core`.
+- **Core Logic Engine** — formula parsing, tautology checking, truth table generation, evaluation tree construction, and educational explanation building, in `tautoteacher2.core.logica` and `tautoteacher2.core.visualizacion`.
 - **NLP Pipeline** — rule-based Spanish natural-language processing (text normalization, lexer tokenization, morphological normalization, and semantic mapping) in `tautoteacher2.nlp`.
 - **LogicScript DSL** — a lightweight domain-specific language and runtime that bridges the NLP pipeline and the logic engine, housed in `tautoteacher2.logicscript`.
 - **User Interface** — a Swing GUI controller and panel components in `tautoteacher2.ui`, which calls into the service layer rather than directly into the engine.

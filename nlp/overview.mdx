@@ -1,10 +1,10 @@
 ---
-title: "NLP Pipeline: Spanish to Propositional Logic"
+title: "NLP Pipeline: Spanish Text to Propositional Logic IR"
 sidebarTitle: "NLP Overview"
-description: "TautoTeacher 2.0's rule-based NLP pipeline normalizes, tokenizes, and semantically maps Spanish sentences to propositional logic formulas without machine learning."
+description: "TautoTeacher's rule-based NLP pipeline normalizes, tokenizes, and maps Spanish sentences to propositional logic IR without machine learning."
 ---
 
-TautoTeacher 2.0 can take a raw Spanish sentence such as *"si llueve entonces llevo paraguas"* and automatically produce the propositional formula `(llover → llevar)`. The transformation runs entirely through deterministic, rule-based code — no machine learning, no external services. A raw sentence enters the pipeline, passes through four sequential stages, and exits as a structured `LogicExpr` IR node ready for formula emission or tautology checking.
+TautoTeacher 2.0 can take a raw Spanish sentence such as *"si llueve entonces llevo paraguas"* and automatically produce the propositional formula `(llover → llevar paraguas)`. The transformation runs entirely through deterministic, rule-based code — no machine learning, no external services. A raw sentence enters the pipeline, passes through four sequential stages, and exits as a structured `LogicExpr` IR node ready for formula emission or tautology checking.
 
 <Steps>
   <Step title="Text Normalization — NormalizadorTexto">
@@ -31,9 +31,9 @@ The following table traces the sentence `"si llueve entonces llevo paraguas"` th
 | **After NormalizadorTexto** | `si llueve entonces llevo paraguas` |
 | **After NaturalLexer** | `[SI("si"), LITERAL("llueve"), ENTONCES("entonces"), LITERAL("llevo paraguas")]` |
 | **Pattern matched** | `SI_ENTONCES` → IR type `IMP` |
-| **After canonicalization** | antecedent `llueve → llover`, consequent `llevo → llevar` |
-| **IR tree** | `ImpExpr(AtomExpr("llover"), AtomExpr("llevar"))` |
-| **Emitted formula** | `(llover → llevar)` |
+| **After canonicalization** | antecedent `llueve → llover`, consequent `llevo paraguas → llevar paraguas` |
+| **IR tree** | `ImpExpr(AtomExpr("llover"), AtomExpr("llevar paraguas"))` |
+| **Emitted formula** | `(llover → llevar paraguas)` |
 
 The example shows why morphological normalization matters: without the lemma entries for `llueve` and `llevo`, the proposition labels would be the raw conjugated forms, making formula comparisons fragile across different phrasings of the same idea.
 
